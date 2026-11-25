@@ -1,0 +1,2325 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;font:14px/1.5 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Перегрузка операторов и наследование</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* ── Палитра снята с диагностики gcc/clang: magenta = warning, cyan = note,
+      red = error, green = приглашение шелла. Нейтрали уведены в фиолетовый. ── */
+:root {
+  --paper:      #FAF8FC;
+  --paper-2:    #F1EDF6;
+  --rail:       #E4DCEE;
+  --ink:        #1B1524;
+  --ink-soft:   #57496B;
+  --ink-faint:  #8A7CA0;
+  --accent:     #B01490;
+  --accent-dim: #F6E4F3;
+  --note:       #0B6F7C;
+  --err:        #C42430;
+  --ok:         #12704F;
+  --term-bg:    #211A2C;
+  --term-fg:    #EDE6F4;
+  --term-dim:   #A493B8;
+  --shadow:     0 1px 2px rgba(27,21,36,.06), 0 12px 32px -18px rgba(27,21,36,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #150F1D;
+    --paper-2:    #1E1729;
+    --rail:       #322646;
+    --ink:        #F2ECF8;
+    --ink-soft:   #B5A6C8;
+    --ink-faint:  #7E6E94;
+    --accent:     #F175D2;
+    --accent-dim: #2C1B31;
+    --note:       #52CFDA;
+    --err:        #FF7A80;
+    --ok:         #4FD9A7;
+    --term-bg:    #0D0913;
+    --term-fg:    #EDE6F4;
+    --term-dim:   #9585AA;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#150F1D; --paper-2:#1E1729; --rail:#322646; --ink:#F2ECF8;
+  --ink-soft:#B5A6C8; --ink-faint:#7E6E94; --accent:#F175D2; --accent-dim:#2C1B31;
+  --note:#52CFDA; --err:#FF7A80; --ok:#4FD9A7; --term-bg:#0D0913; --term-fg:#EDE6F4;
+  --term-dim:#9585AA;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(15px, 1.35vw, 19px);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .display {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+code, kbd, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+
+/* ── каркас колоды ── */
+.progress {
+  position: fixed; inset: 0 auto auto 0; height: 3px; width: 0;
+  background: var(--accent); z-index: 40; transition: width .25s ease;
+}
+.deck { min-height: 100svh; display: flex; flex-direction: column; }
+.slide {
+  display: none;
+  flex: 1; min-height: 100svh;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1.1rem, 5vw, 5rem) clamp(4.5rem, 8vh, 6rem);
+  flex-direction: column; justify-content: center; gap: clamp(1rem, 2.2vh, 1.9rem);
+}
+.slide.is-active { display: flex; }
+.wrap { width: 100%; max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: clamp(.9rem, 2vh, 1.7rem); }
+
+/* ── шапка слайда: секция + бюджет времени ── */
+.eyebrow { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; }
+.eyebrow .sec {
+  font-family: "JetBrains Mono", monospace; font-size: .72em; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+.eyebrow .clock {
+  font-family: "JetBrains Mono", monospace; font-size: .7em; color: var(--ink-faint);
+  border: 1px solid var(--rail); border-radius: 999px; padding: .1em .7em;
+  font-variant-numeric: tabular-nums;
+}
+h2 { font-size: clamp(1.8rem, 4.2vw, 3.3rem); }
+.sub { color: var(--ink-soft); max-width: 62ch; font-size: 1.06em; }
+
+/* ── терминал ── */
+.term {
+  background: var(--term-bg); color: var(--term-fg); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.4rem) clamp(1rem, 2vw, 1.5rem);
+  font-family: "JetBrains Mono", monospace; font-size: clamp(.78rem, 1.15vw, 1.02rem);
+  line-height: 1.65; overflow-x: auto; box-shadow: var(--shadow);
+  white-space: pre; tab-size: 4;
+}
+.term .p { color: var(--ok); font-weight: 700; }
+.term .c { color: var(--term-fg); font-weight: 700; }
+.term .o { color: var(--term-dim); }
+.term .e { color: #FF7A80; font-weight: 700; }
+.term .w { color: #F175D2; font-weight: 700; }
+.term .n { color: #52CFDA; }
+.term .cm { color: var(--term-dim); font-style: italic; }
+
+/* ── код на «бумаге» ── */
+pre.code {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.3rem) clamp(1rem, 2vw, 1.4rem); margin: 0;
+  font-size: clamp(.8rem, 1.2vw, 1.05rem); line-height: 1.6; overflow-x: auto;
+}
+pre.code .k { color: var(--accent); font-weight: 700; }
+pre.code .s { color: var(--ok); }
+pre.code .pp { color: var(--note); }
+pre.code .cm { color: var(--ink-faint); font-style: italic; }
+pre.code .hl { background: var(--accent-dim); border-radius: 3px; padding: 0 .15em; }
+
+/* ── сетки ── */
+.cols { display: grid; gap: clamp(.8rem, 1.6vw, 1.4rem); }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.cols.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.panel {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 12px;
+  padding: clamp(.9rem, 1.7vw, 1.3rem); display: flex; flex-direction: column; gap: .5rem;
+}
+.panel h3 { font-size: 1.12em; }
+.panel p { margin: 0; color: var(--ink-soft); font-size: .95em; }
+.panel ul { margin: 0; padding-left: 1.1em; color: var(--ink-soft); font-size: .95em; }
+.panel li + li { margin-top: .3em; }
+
+/* один выделенный блок, а не «всё карточки» */
+.pin { background: var(--accent-dim); border-color: transparent; }
+.pin h3 { color: var(--accent); }
+.pin p, .pin ul { color: var(--ink); }
+
+/* ── таблица команд ── */
+table { border-collapse: collapse; width: 100%; font-size: clamp(.82rem, 1.15vw, 1rem); }
+th, td { text-align: left; padding: .42em .8em .42em 0; border-bottom: 1px solid var(--rail); vertical-align: baseline; }
+th { color: var(--ink-faint); font-weight: 600; font-size: .8em; text-transform: uppercase; letter-spacing: .08em; }
+td.cmd { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+td.dsc { color: var(--ink-soft); }
+.table-scroll { overflow-x: auto; }
+
+/* ── таймлайн стандартов: порядок здесь несёт смысл ── */
+.timeline { display: flex; gap: 0; overflow-x: auto; padding-bottom: .4rem; }
+.tl-step { flex: 1 0 auto; min-width: 108px; padding: 0 .75rem; border-left: 2px solid var(--rail); }
+.tl-step:first-child { border-left-color: var(--accent); }
+.tl-step .y { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 1.05em; }
+.tl-step .what { color: var(--ink-soft); font-size: .85em; display: block; margin-top: .2em; }
+.tl-step.now { border-left-color: var(--accent); }
+.tl-step.now .y { color: var(--accent); }
+
+/* ── конвейер сборки: настоящая последовательность, порядок обязателен ── */
+.pipe { display: flex; align-items: stretch; gap: .3rem; overflow-x: auto; padding-bottom: .4rem; }
+.node {
+  flex: 0 0 auto; min-width: 132px; display: flex; flex-direction: column; gap: .1rem;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: clamp(.55rem, 1.1vw, .85rem) clamp(.6rem, 1.2vw, 1rem);
+}
+.node .fn { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: clamp(.82rem, 1.2vw, 1.02rem); }
+.node .fd { font-size: .76em; color: var(--ink-faint); line-height: 1.35; }
+.node.start .fn { color: var(--ink); }
+.node.done { background: var(--accent-dim); border-color: transparent; }
+.node.done .fn { color: var(--accent); }
+.node.done .fd { color: var(--ink-soft); }
+.step {
+  flex: 0 0 auto; min-width: 104px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .05rem; padding: 0 .25rem;
+}
+.step .tool { font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-align: center; }
+.step .glyph { color: var(--ink-faint); font-size: 1.15em; line-height: 1; }
+.step .flag { font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); }
+
+/* ── повестка: пять смысловых групп, порядок несёт смысл ── */
+.plan { display: flex; flex-direction: column; gap: clamp(.5rem, 1.4vh, 1.05rem); }
+.phase {
+  display: grid; grid-template-columns: minmax(148px, 215px) 1fr;
+  gap: clamp(.5rem, 1.6vw, 1.4rem); align-items: start;
+  padding-left: clamp(.7rem, 1.4vw, 1.15rem);
+  border-left: 2px solid var(--rail);
+}
+.phase.focus { border-left-color: var(--accent); }
+.phase-head { display: flex; align-items: baseline; }
+.phase-name {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(.95rem, 1.5vw, 1.28rem); letter-spacing: -.015em; line-height: 1.15;
+}
+.phase.focus .phase-name { color: var(--accent); }
+.phase-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.phase-items li { display: flex; align-items: baseline; gap: .9rem; padding: .24em 0; }
+.phase-items li + li { border-top: 1px solid var(--rail); }
+.phase-items .pt { flex: 1; }
+.phase-items .pd {
+  font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+@media (max-width: 660px) { .phase { grid-template-columns: 1fr; gap: .2rem; } }
+
+/* ── титул ── */
+.hero-num {
+  font-family: "JetBrains Mono", monospace; color: var(--accent); font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase; font-size: .82em;
+}
+h1 { font-size: clamp(2.4rem, 7vw, 5.4rem); }
+.hero-line { height: 2px; background: var(--accent); width: 84px; }
+
+/* ── подвал ── */
+.bar {
+  position: fixed; inset: auto 0 0 0; z-index: 30;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .5rem clamp(.7rem, 3vw, 1.6rem);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--rail);
+  font-family: "JetBrains Mono", monospace; font-size: .78rem;
+}
+.bar .spacer { flex: 1; }
+button {
+  font-family: "JetBrains Mono", monospace; font-size: .78rem; cursor: pointer;
+  background: transparent; color: var(--ink-soft); border: 1px solid var(--rail);
+  border-radius: 7px; padding: .3em .7em;
+}
+button:hover { color: var(--accent); border-color: var(--accent); }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.counter { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.counter b { color: var(--ink); }
+
+/* ── заметки докладчика ── */
+#notes {
+  position: fixed; inset: auto 0 0 0; z-index: 35;
+  background: var(--term-bg); color: var(--term-fg);
+  border-top: 2px solid var(--accent);
+  padding: 1rem clamp(.8rem, 3vw, 1.8rem) 3.1rem;
+  max-height: 52svh; overflow-y: auto;
+  font-size: clamp(.8rem, 1.1vw, .95rem); line-height: 1.55;
+}
+#notes h4 {
+  margin: 0 0 .5rem; font-family: "JetBrains Mono", monospace; font-size: .72rem;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+#notes ul { margin: 0; padding-left: 1.15em; }
+#notes li + li { margin-top: .35em; }
+#notes code { color: #F175D2; }
+#notes-time { color: var(--term-dim); letter-spacing: .08em; }
+
+kbd {
+  border: 1px solid var(--rail); border-bottom-width: 2px; border-radius: 5px;
+  padding: .05em .4em; font-size: .85em; color: var(--ink-soft);
+}
+.hint { color: var(--ink-faint); font-size: .9em; }
+strong { color: var(--ink); font-weight: 600; }
+.big { font-size: clamp(1.1rem, 1.9vw, 1.45rem); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* ══ seminar 2: вопросы, раскрытие ответов, задачи, таймер ══ */
+
+/* ответ скрыт, но место под него занято — слайд не прыгает при раскрытии */
+.reveal { position: relative; border-radius: 12px; min-height: 3.2rem; }
+.reveal:not(.shown) { cursor: pointer; }
+.reveal:not(.shown) > * { visibility: hidden; }
+.reveal:not(.shown)::after {
+  content: attr(data-label);
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--rail); border-radius: 12px; background: var(--paper);
+  font-family: "JetBrains Mono", monospace; font-size: .82em; letter-spacing: .04em; color: var(--ink-faint);
+}
+.reveal:not(.shown):hover::after,
+.reveal:not(.shown):focus-visible::after { border-color: var(--accent); color: var(--accent); }
+.reveal:focus-visible { outline: none; }
+.reveal.shown { animation: rv .2s ease-out; }
+@keyframes rv { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* варианты ответа: зал показывает номер на пальцах */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .55rem; }
+.opt {
+  display: flex; gap: .7rem; align-items: baseline;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: .5rem .85rem; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem);
+  /* длинные варианты переносятся, а не уезжают за край экрана; pre-wrap бережёт пробелы в выводе программ */
+  white-space: pre-wrap; overflow-wrap: anywhere; transition: background .2s, border-color .2s, opacity .2s;
+}
+.opt .n { font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+.opt > span:last-child { min-width: 0; }
+.slide.answered .opt { opacity: .45; }
+.slide.answered .opt.correct { opacity: 1; background: var(--accent-dim); border-color: var(--accent); }
+
+.ask {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(1.05rem, 1.9vw, 1.45rem); letter-spacing: -.01em;
+}
+.label {
+  font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint);
+}
+.stack { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+
+/* ответ: вывод программы + объяснение */
+.answer { display: flex; flex-direction: column; gap: .6rem; }
+.answer .why { background: var(--accent-dim); border-radius: 10px; padding: .75rem 1rem; color: var(--ink); font-size: .96em; }
+.answer .why p + p { margin-top: .45rem; }
+
+/* задачи */
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .7rem; }
+.lvl {
+  display: inline-block; font-family: "JetBrains Mono", monospace; font-size: .66em; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor;
+  border-radius: 999px; padding: .08em .6em; vertical-align: .2em; margin-left: .45em;
+}
+.lvl.l1 { color: var(--ok); }
+.lvl.l2 { color: var(--note); }
+.lvl.l3 { color: var(--accent); }
+.tasklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .7rem; }
+.tasklist .panel h3 { font-size: 1em; }
+pre.code.small, .term.small { font-size: clamp(.72rem, 1vw, .9rem); line-height: 1.5; }
+pre.code .num { color: var(--note); }
+
+/* таймер в подвале */
+#timer { font-variant-numeric: tabular-nums; }
+#timer.running { color: var(--accent); border-color: var(--accent); }
+#timer.done { color: var(--err); border-color: var(--err); }
+.keys-hint { color: var(--ink-faint); font-size: .72rem; }
+@media (max-width: 760px) { .keys-hint { display: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal.shown { animation: none; } }
+
+/* подпись под фрагментом: откуда он */
+.src { font-family: "JetBrains Mono", monospace; font-size: .68em; color: var(--ink-faint); line-height: 1.4; }
+.src code { font-size: 1em; }
+
+/* входной буфер: какие символы кто прочитал */
+.buf { display: flex; flex-wrap: wrap; gap: 4px; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem); }
+.buf .ch { border: 1px solid var(--rail); border-radius: 6px; padding: .15em .5em; background: var(--paper-2); min-width: 1.7em; text-align: center; }
+.buf .ch.nl { color: var(--note); font-weight: 700; }
+.buf .ch.a, .buf-legend i.a { background: var(--accent-dim); border-color: var(--accent); }
+.buf .ch.g, .buf-legend i.g { background: color-mix(in srgb, var(--note) 20%, var(--paper)); border-color: var(--note); }
+.buf .ch.rest { opacity: .45; border-style: dashed; }
+.buf-legend { display: flex; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8em; color: var(--ink-soft); }
+.buf-legend i { display: inline-block; width: .95em; height: .95em; border: 1px solid var(--rail); border-radius: 3px; vertical-align: -.12em; margin-right: .35em; }
+.buf-legend i.rest { border-style: dashed; opacity: .6; }
+.buf .ch.w, .buf-legend i.w { background: color-mix(in srgb, var(--ok) 20%, var(--paper)); border-color: var(--ok); }
+
+/* полные программы: чем длиннее, тем мельче; и страховка от выхода за экран */
+pre.code.xsmall { font-size: clamp(.62rem, .85vw, .8rem); line-height: 1.42; }
+pre.code { max-height: 74svh; overflow: auto; }
+
+/* текст на всю ширину */
+.slide .sub { max-width: none; }
+body .doc { max-width: 1100px; }
+body .doc .lede { max-width: none; }
+
+/* шире на больших экранах, таблицы без лишней прокрутки */
+.wrap { max-width: min(1680px, 94vw); }
+.cols > * { min-width: 0; }
+.slide table td.cmd { white-space: normal; }
+
+.bar button.on { color: var(--accent); border-color: var(--accent); }
+
+/* режимы vim: Normal в центре, остальные вокруг */
+.modes { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; gap: .6rem .5rem; align-items: center; }
+.mode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .65rem .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.mode b { font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-size: 1.12em; }
+.mode small { color: var(--ink-soft); font-size: .86em; line-height: 1.35; }
+.mode.main { grid-column: 3; grid-row: 1 / span 2; align-self: stretch; justify-content: center; text-align: center; background: var(--accent-dim); border-color: transparent; }
+.mode.main b { color: var(--accent); font-size: 1.6em; }
+.edge { display: flex; flex-direction: column; align-items: center; gap: .15rem; font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint); white-space: nowrap; }
+.edge .to { color: var(--accent); font-weight: 700; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } .mode.main { grid-column: auto; grid-row: auto; } .edge { flex-direction: row; gap: .8rem; } }
+.keys td.cmd { white-space: nowrap; }
+.vis { color: var(--err); }
+
+.flow { display: flex; align-items: stretch; gap: .45rem; flex-wrap: wrap; }
+.fnode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .6rem .75rem; display: flex; flex-direction: column; gap: .1rem; flex: 1 1 0; min-width: 0; }
+.fnode b { font-family: "JetBrains Mono", monospace; font-size: 1em; }
+.fnode small { color: var(--ink-soft); font-size: .84em; line-height: 1.3; }
+.fnode.out { background: var(--accent-dim); border-color: transparent; }
+.fnode.out b { color: var(--accent); }
+.arr { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); white-space: nowrap; }
+.arr b { color: var(--accent); font-weight: 700; }
+@media (max-width: 900px) { .flow { flex-direction: column; } .arr { flex-direction: row; gap: .5rem; } }
+ol.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: .4rem; }
+ol.steps code { white-space: nowrap; }
+.mini { font-size: .92em; }
+.slide table td.cmd code { white-space: nowrap; }
+.term .y { color: #E8C468; }
+</style>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section class="slide is-active" data-sec="Семинар 7" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    <div class="hero-num">C++ · 1 курс · семинар 07</div>
+<h1>Перегрузка операторов и наследование</h1>
+<div class="hero-line"></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> Account {
+  <span class="k">public</span>:
+    <span class="k">int</span> GetId() <span class="k">const</span> {
+        <span class="k">return</span> id_;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> id_ = <span class="num">7</span>;
+    <span class="k">int</span> balance_ = <span class="num">100</span>;
+};
+
+<span class="k">struct</span> AccountView {
+    <span class="k">int</span> id;
+    <span class="k">int</span> balance;
+};
+
+<span class="k">int</span> main() {
+    Account account;
+    AccountView&amp; view = <span class="k">reinterpret_cast</span>&lt;AccountView&amp;&gt;(account);
+    <span class="k">std</span>::cout &lt;&lt; view.balance &lt;&lt; <span class="s">'\n'</span>;
+    view.balance = <span class="num">1000000</span>;
+    <span class="k">std</span>::cout &lt;&lt; view.balance &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>100
+1000000</span></div><div class="opt"><span class="n">2</span><span>7
+1000000</span></div><div class="opt"><span class="n">3</span><span>CE</span></div><div class="opt"><span class="n">4</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">100</span>
+<span class="o">1000000</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">struct</span> Point {
+    <span class="k">double</span> x;
+    <span class="k">double</span> y;
+};
+
+<span class="k">struct</span> Vector2 {
+    <span class="k">double</span> x;
+    <span class="k">double</span> y;
+};
+
+<span class="k">double</span> SumX(<span class="k">const</span> Vector2* vectors, <span class="k">size_t</span> count) {
+    <span class="k">double</span> sum = <span class="num">0</span>;
+    <span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">0</span>; i &lt; count; ++i) {
+        sum += vectors[i].x;
+    }
+    <span class="k">return</span> sum;
+}
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::vector&lt;Point&gt; points = {{<span class="num">1</span>, <span class="num">2</span>}, {<span class="num">3</span>, <span class="num">4</span>}, {<span class="num">5</span>, <span class="num">6</span>}};
+    <span class="k">const</span> Vector2* vectors = <span class="k">reinterpret_cast</span>&lt;<span class="k">const</span> Vector2*&gt;(points.data());
+    <span class="k">std</span>::cout &lt;&lt; SumX(vectors, points.size()) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>9</span></div><div class="opt"><span class="n">2</span><span>CE</span></div><div class="opt"><span class="n">3</span><span>0</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">9</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-sec="Вопрос залу" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Какой конструктор вызовется?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;initializer_list&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Point {
+    <span class="k">int</span> x;
+    <span class="k">int</span> y;
+};
+
+<span class="k">class</span> Numbers {
+  <span class="k">public</span>:
+    Numbers(<span class="k">int</span> count, <span class="k">int</span> value) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Numbers(int, int): "</span> &lt;&lt; count &lt;&lt; <span class="s">' '</span> &lt;&lt; value &lt;&lt; <span class="s">'\n'</span>;
+    }
+
+    Numbers(<span class="k">std</span>::initializer_list&lt;<span class="k">int</span>&gt; values) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Numbers(initializer_list):"</span>;
+        <span class="k">for</span> (<span class="k">int</span> value : values) {
+            <span class="k">std</span>::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; value;
+        }
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">'\n'</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Point p{<span class="num">1</span>, <span class="num">2</span>};
+    <span class="k">std</span>::cout &lt;&lt; p.x &lt;&lt; <span class="s">' '</span> &lt;&lt; p.y &lt;&lt; <span class="s">'\n'</span>;
+    Numbers a(<span class="num">3</span>, <span class="num">7</span>);
+    Numbers b{<span class="num">3</span>, <span class="num">7</span>};
+    Numbers c = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>};
+}</pre></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>строка</th><th>что вызовется</th></tr><tr><td class="cmd">Point p{1, 2}</td><td class="dsc"><div class="reveal" data-label="ответ  →">агрегатная инициализация: полей по порядку</div></td></tr><tr><td class="cmd">Numbers a(3, 7)</td><td class="dsc"><div class="reveal" data-label="ответ  →"><code>Numbers(int, int)</code></div></td></tr><tr><td class="cmd">Numbers b{3, 7}</td><td class="dsc"><div class="reveal" data-label="ответ  →"><code>Numbers(initializer_list)</code></div></td></tr><tr><td class="cmd">Numbers c = {1, 2, 3, 4}</td><td class="dsc"><div class="reveal" data-label="ответ  →"><code>Numbers(initializer_list)</code></div></td></tr></table></div><div class="reveal" data-label="вывод программы  →"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1 2</span>
+<span class="o">Numbers(int, int): 3 7</span>
+<span class="o">Numbers(initializer_list): 3 7</span>
+<span class="o">Numbers(initializer_list): 1 2 3 4</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Какой конструктор вызовется?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;initializer_list&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">class</span> Names {
+  <span class="k">public</span>:
+    Names(<span class="k">int</span> count, <span class="k">int</span> length) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Names(int, int)\n"</span>;
+    }
+
+    Names(<span class="k">std</span>::initializer_list&lt;<span class="k">std</span>::string&gt; names) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Names(initializer_list&lt;string&gt;)\n"</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Names a{<span class="s">"anna"</span>, <span class="s">"boris"</span>};
+    Names b{<span class="num">3</span>, <span class="num">7</span>};
+}</pre></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>строка</th><th>что вызовется</th></tr><tr><td class="cmd">Names a{"anna", "boris"}</td><td class="dsc"><div class="reveal" data-label="ответ  →"><code>Names(initializer_list&lt;string&gt;)</code></div></td></tr><tr><td class="cmd">Names b{3, 7}</td><td class="dsc"><div class="reveal" data-label="ответ  →"><code>Names(int, int)</code></div></td></tr></table></div><div class="reveal" data-label="вывод программы  →"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">Names(initializer_list&lt;string&gt;)</span>
+<span class="o">Names(int, int)</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::vector&lt;<span class="k">char</span>&gt; v = {<span class="s">","</span>, <span class="s">";"</span>};
+    <span class="k">std</span>::cout &lt;&lt; v.size() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>2</span></div><div class="opt"><span class="n">2</span><span>CE</span></div><div class="opt correct"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="e">terminate called after throwing an instance of 'std::length_error'</span>
+<span class="e">  what():  cannot create std::vector larger than max_size()</span>
+<span class="e">Aborted (core dumped)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что такое y?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Y {
+    <span class="k">int</span> value = <span class="num">5</span>;
+};
+
+<span class="k">int</span> main() {
+    Y y();
+    <span class="k">std</span>::cout &lt;&lt; y.value &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>выведет 5</span></div><div class="opt"><span class="n">2</span><span>выведет 0</span></div><div class="opt correct"><span class="n">3</span><span>CE</span></div><div class="opt"><span class="n">4</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall vexing_empty.cpp</span>
+<span class="w">vexing_empty.cpp:8:8: warning: empty parentheses were disambiguated as a</span>
+<span class="w">  function declaration</span>
+<span class="o">vexing_empty.cpp:8:8: note: remove parentheses to default-initialize a</span>
+<span class="o">  variable</span>
+<span class="e">vexing_empty.cpp:9:20: error: request for member 'value' in 'y', which is</span>
+<span class="e">  of non-class type 'Y()'</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что такое y?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> X {};
+
+<span class="k">struct</span> Y {
+    Y(X) {
+    }
+};
+
+<span class="k">int</span> main() {
+    Y y(X());
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(y) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>объект типа Y</span></div><div class="opt correct"><span class="n">2</span><span>функция</span></div><div class="opt"><span class="n">3</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall vexing.cpp</span>
+<span class="w">vexing.cpp:11:8: warning: parentheses were disambiguated</span>
+<span class="w">  as a function declaration</span>
+<span class="o">vexing.cpp:11:8: note: replace parentheses with braces</span>
+<span class="o">  to declare a variable</span>
+<span class="e">vexing.cpp:12:25: error: ISO C++ forbids applying ‘sizeof’</span>
+<span class="e">  to an expression of function type</span></div></div></div><div class="reveal" data-label="как исправить  →"><div class="stack"><pre class="code small">Y y{X()};</pre><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Скомпилируется ли?</h2>
+<div class="cols two"><div class="stack"><span class="label">вариант 1</span><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Counter {
+    <span class="k">int</span>&amp; value;
+
+    Counter(<span class="k">int</span>&amp; target) : value(target) {
+    }
+
+    <span class="k">void</span> Increment() {
+        ++value;
+    }
+};
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> clicks = <span class="num">0</span>;
+    Counter counter(clicks);
+    counter.Increment();
+    counter.Increment();
+    <span class="k">std</span>::cout &lt;&lt; clicks &lt;&lt; <span class="s">'\n'</span>;
+}</pre><div class="reveal" data-label="ответ  →"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">2</span></div></div></div><div class="stack"><span class="label">вариант 2</span><pre class="code xsmall"><span class="k">struct</span> Counter {
+    <span class="k">int</span>&amp; value;
+
+    Counter(<span class="k">int</span>&amp; target) {
+        value = target;
+    }
+};
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> clicks = <span class="num">0</span>;
+    Counter counter(clicks);
+}</pre><div class="reveal" data-label="ответ  →"><div class="term small"><span class="e">error: uninitialized reference member in ‘int&amp;’</span>
+<span class="o">note: ‘int&amp; Counter::value’ should be initialized</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">int</span> x = <span class="num">0</span>;
+
+<span class="k">struct</span> S {
+    <span class="k">int</span>&amp; r = x;
+
+    S(<span class="k">int</span>&amp; y) {
+        r = y;
+    }
+};
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> y = <span class="num">1</span>;
+    S s(y);
+    ++s.r;
+    <span class="k">std</span>::cout &lt;&lt; x &lt;&lt; y &lt;&lt; s.r &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>212</span></div><div class="opt"><span class="n">2</span><span>112</span></div><div class="opt"><span class="n">3</span><span>022</span></div><div class="opt"><span class="n">4</span><span>122</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">212</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что произойдёт?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> S {
+    <span class="k">const</span> <span class="k">int</span>&amp; r;
+
+    S() : r(<span class="num">5</span>) {
+    }
+};
+
+<span class="k">int</span> main() {
+    S s;
+    <span class="k">std</span>::cout &lt;&lt; s.r &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>выведет 5</span></div><div class="opt correct"><span class="n">2</span><span>UB</span></div><div class="opt"><span class="n">3</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall -Wextra ref_member_temp.cpp &amp;&amp; ./a.out</span>
+<span class="w">warning: a temporary bound to ‘S::r’ only persists until</span>
+<span class="w">  the constructor exits [-Wextra]</span>
+<span class="o">5</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;cstring&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> String {
+  <span class="k">public</span>:
+    String(<span class="k">const</span> <span class="k">char</span>* text) : size_(<span class="k">std</span>::strlen(text)), data_(<span class="k">new</span> <span class="k">char</span>[size_ + <span class="num">1</span>]) {
+        <span class="k">std</span>::memcpy(data_, text, size_ + <span class="num">1</span>);
+    }
+
+    ~String() {
+        <span class="k">delete</span>[] data_;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_;
+    <span class="k">char</span>* data_;
+};
+
+<span class="k">int</span> main() {
+    String a = <span class="s">"abc"</span>;
+    String b = a;
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"ok\n"</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt correct"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет ok</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">ok</span>
+<span class="e">free(): double free detected in tcache 2</span>
+<span class="e">Aborted (core dumped)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Сколько раз вызовется деструктор?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> Logger {
+  <span class="k">public</span>:
+    Logger(<span class="k">int</span> id) : id_(id) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Logger("</span> &lt;&lt; id_ &lt;&lt; <span class="s">")\n"</span>;
+    }
+
+    ~Logger() {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"~Logger("</span> &lt;&lt; id_ &lt;&lt; <span class="s">")\n"</span>;
+    }
+
+    Logger&amp; operator=(<span class="k">const</span> Logger&amp; other) {
+        this-&gt;~Logger();
+        id_ = other.id_;
+        <span class="k">return</span> *this;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> id_;
+};
+
+<span class="k">int</span> main() {
+    Logger a(<span class="num">1</span>);
+    Logger b(<span class="num">2</span>);
+    a = b;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>2</span></div><div class="opt correct"><span class="n">2</span><span>3</span></div><div class="opt"><span class="n">3</span><span>4</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">Logger(1)</span>
+<span class="o">Logger(2)</span>
+<span class="o">~Logger(1)</span>
+<span class="o">~Logger(2)</span>
+<span class="o">~Logger(2)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="k">class</span> String {
+  <span class="k">public</span>:
+    <span class="cm">// конструкторы, деструктор, Data() — как обычно</span>
+
+    String&amp; operator=(<span class="k">const</span> String&amp; other) {
+        <span class="k">delete</span>[] data_;
+        size_ = other.size_;
+        data_ = <span class="k">new</span> <span class="k">char</span>[size_ + <span class="num">1</span>];
+        <span class="k">std</span>::memcpy(data_, other.data_, size_ + <span class="num">1</span>);
+        <span class="k">return</span> *this;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_;
+    <span class="k">char</span>* data_;
+};
+
+<span class="k">int</span> main() {
+    String s = <span class="s">"abc"</span>;
+    s = s;
+    <span class="k">std</span>::cout &lt;&lt; s.Data() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt correct"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет abc</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">[�_</span>
+<span class="p">$</span> <span class="c">g++ -g -fsanitize=address self_assign.cpp &amp;&amp; ./a.out</span>
+<span class="e">ERROR: AddressSanitizer: heap-buffer-overflow on address 0x502000000034</span>
+<span class="w">READ of size 5 at 0x502000000034 thread T0</span>
+<span class="y">    #2 in main self_assign.cpp:38</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Какая проверка правильная?</h2>
+<div class="cols two"><div class="stack"><span class="label">вариант 1</span><pre class="code small">String&amp; operator=(<span class="k">const</span> String&amp; other) {
+    <span class="k">if</span> (*this == other) {
+        <span class="k">return</span> *this;
+    }
+    ...
+}</pre></div><div class="stack"><span class="label">вариант 2</span><pre class="code small">String&amp; operator=(<span class="k">const</span> String&amp; other) {
+    <span class="k">if</span> (this == &amp;other) {
+        <span class="k">return</span> *this;
+    }
+    ...
+}</pre><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>1</span></div><div class="opt correct"><span class="n">2</span><span>2</span></div><div class="opt"><span class="n">3</span><span>обе</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ self_check_value.cpp</span>
+<span class="e">self_check_value.cpp:15:19: error: no match for ‘operator==’</span>
+<span class="e">  (operand types are ‘String’ and ‘const String’)</span>
+<span class="p">$</span> <span class="c">g++ self_check_address.cpp &amp;&amp; ./a.out</span>
+<span class="o">abc</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="k">class</span> String {
+  <span class="k">public</span>:
+    <span class="cm">// конструкторы, деструктор, Data() — как обычно</span>
+
+    String&amp; operator=(String other) {
+        Swap(other);
+        <span class="k">return</span> *this;
+    }
+
+    <span class="k">void</span> Swap(String&amp; other) {
+        <span class="k">std</span>::swap(size_, other.size_);
+        <span class="k">std</span>::swap(data_, other.data_);
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_;
+    <span class="k">char</span>* data_;
+};
+
+<span class="k">int</span> main() {
+    String s = <span class="s">"abc"</span>;
+    String t = <span class="s">"hello"</span>;
+    s = t;
+    s = s;
+    <span class="k">std</span>::cout &lt;&lt; s.Data() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>hello</span></div><div class="opt"><span class="n">2</span><span>abc</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">hello</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;cstring&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> String {
+  <span class="k">public</span>:
+    String(<span class="k">const</span> <span class="k">char</span>* text) : size_(<span class="k">std</span>::strlen(text)), data_(<span class="k">new</span> <span class="k">char</span>[size_ + <span class="num">1</span>]) {
+        <span class="k">std</span>::memcpy(data_, text, size_ + <span class="num">1</span>);
+    }
+
+    ~String() {
+        <span class="k">delete</span>[] data_;
+    }
+
+    <span class="k">char</span>&amp; operator[](<span class="k">size_t</span> index) {
+        <span class="k">return</span> data_[index];
+    }
+
+    <span class="k">char</span> operator[](<span class="k">size_t</span> index) <span class="k">const</span> {
+        <span class="k">return</span> data_[index];
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_;
+    <span class="k">char</span>* data_;
+};
+
+<span class="k">int</span> main() {
+    String s = <span class="s">"abcd"</span>;
+    <span class="k">const</span> String&amp; cs = s;
+    <span class="k">const</span> <span class="k">char</span>&amp; c = cs[<span class="num">0</span>];
+    s[<span class="num">0</span>] = <span class="s">'b'</span>;
+    <span class="k">std</span>::cout &lt;&lt; c &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>a</span></div><div class="opt"><span class="n">2</span><span>b</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">a</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если String& вместо const String&?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;cstring&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> String {
+  <span class="k">public</span>:
+    String(<span class="k">const</span> <span class="k">char</span>* text) : size_(<span class="k">std</span>::strlen(text)), data_(<span class="k">new</span> <span class="k">char</span>[size_ + <span class="num">1</span>]) {
+        <span class="k">std</span>::memcpy(data_, text, size_ + <span class="num">1</span>);
+    }
+
+    ~String() {
+        <span class="k">delete</span>[] data_;
+    }
+
+    <span class="k">char</span>&amp; operator[](<span class="k">size_t</span> index) {
+        <span class="k">return</span> data_[index];
+    }
+
+    <span class="k">char</span> operator[](<span class="k">size_t</span> index) <span class="k">const</span> {
+        <span class="k">return</span> data_[index];
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_;
+    <span class="k">char</span>* data_;
+};
+
+<span class="k">int</span> main() {
+    String s = <span class="s">"abcd"</span>;
+    String&amp; rs = s;
+    <span class="k">const</span> <span class="k">char</span>&amp; c = rs[<span class="num">0</span>];
+    s[<span class="num">0</span>] = <span class="s">'b'</span>;
+    <span class="k">std</span>::cout &lt;&lt; c &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>a</span></div><div class="opt correct"><span class="n">2</span><span>b</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">b</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 19 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если const char& operator[] const?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;cstring&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> String {
+  <span class="k">public</span>:
+    String(<span class="k">const</span> <span class="k">char</span>* text) : size_(<span class="k">std</span>::strlen(text)), data_(<span class="k">new</span> <span class="k">char</span>[size_ + <span class="num">1</span>]) {
+        <span class="k">std</span>::memcpy(data_, text, size_ + <span class="num">1</span>);
+    }
+
+    ~String() {
+        <span class="k">delete</span>[] data_;
+    }
+
+    <span class="k">char</span>&amp; operator[](<span class="k">size_t</span> index) {
+        <span class="k">return</span> data_[index];
+    }
+
+    <span class="k">const</span> <span class="k">char</span>&amp; operator[](<span class="k">size_t</span> index) <span class="k">const</span> {
+        <span class="k">return</span> data_[index];
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_;
+    <span class="k">char</span>* data_;
+};
+
+<span class="k">int</span> main() {
+    String s = <span class="s">"abcd"</span>;
+    <span class="k">const</span> String&amp; cs = s;
+    <span class="k">const</span> <span class="k">char</span>&amp; c = cs[<span class="num">0</span>];
+    s[<span class="num">0</span>] = <span class="s">'b'</span>;
+    <span class="k">std</span>::cout &lt;&lt; c &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>a</span></div><div class="opt correct"><span class="n">2</span><span>b</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">b</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> Text {
+  <span class="k">public</span>:
+    <span class="k">char</span>&amp; operator[](<span class="k">size_t</span> index) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"non-const\n"</span>;
+        <span class="k">return</span> data_[index];
+    }
+
+    <span class="k">const</span> <span class="k">char</span>&amp; operator[](<span class="k">size_t</span> index) <span class="k">const</span> {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"const\n"</span>;
+        <span class="k">return</span> data_[index];
+    }
+
+  <span class="k">private</span>:
+    <span class="k">char</span> data_[<span class="num">4</span>] = <span class="s">"abc"</span>;
+};
+
+<span class="k">int</span> main() {
+    Text s;
+    <span class="k">const</span> Text&amp; cs = s;
+    s[<span class="num">0</span>];
+    cs[<span class="num">0</span>];
+    s[<span class="num">1</span>] = <span class="s">'x'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>non-const
+const
+non-const</span></div><div class="opt"><span class="n">2</span><span>const
+const
+const</span></div><div class="opt"><span class="n">3</span><span>non-const
+non-const
+non-const</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">non-const</span>
+<span class="o">const</span>
+<span class="o">non-const</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Сколько объектов создаст x += y?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm">// Number: int value_ и счётчик Number::created,</span>
+<span class="cm">// который увеличивает каждый конструктор</span>
+
+Number operator+(<span class="k">const</span> Number&amp; a, <span class="k">const</span> Number&amp; b) {
+    <span class="k">return</span> Number(a.Value() + b.Value());
+}
+
+Number&amp; Number::operator+=(<span class="k">const</span> Number&amp; other) {
+    *this = *this + other;
+    <span class="k">return</span> *this;
+}
+
+<span class="k">int</span> main() {
+    Number x = <span class="num">1</span>;
+    Number y = <span class="num">2</span>;
+    Number::created = <span class="num">0</span>;
+    x += y;
+    <span class="k">std</span>::cout &lt;&lt; Number::created &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>0</span></div><div class="opt correct"><span class="n">2</span><span>1</span></div><div class="opt"><span class="n">3</span><span>2</span></div><div class="opt"><span class="n">4</span><span>3</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если + через +=?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm">// Number: int value_ и счётчик Number::created,</span>
+<span class="cm">// который увеличивает каждый конструктор</span>
+
+Number&amp; Number::operator+=(<span class="k">const</span> Number&amp; other) {
+    value_ += other.value_;
+    <span class="k">return</span> *this;
+}
+
+Number operator+(<span class="k">const</span> Number&amp; a, <span class="k">const</span> Number&amp; b) {
+    Number result = a;
+    result += b;
+    <span class="k">return</span> result;
+}
+
+<span class="k">int</span> main() {
+    Number x = <span class="num">1</span>;
+    Number y = <span class="num">2</span>;
+    Number::created = <span class="num">0</span>;
+    x += y;
+    <span class="k">std</span>::cout &lt;&lt; Number::created &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>0</span></div><div class="opt"><span class="n">2</span><span>1</span></div><div class="opt"><span class="n">3</span><span>2</span></div><div class="opt"><span class="n">4</span><span>3</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">0</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 23 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> BigInteger {
+  <span class="k">public</span>:
+    BigInteger(<span class="k">int</span> value) : value_(value) {
+    }
+
+    BigInteger operator+(<span class="k">const</span> BigInteger&amp; other) <span class="k">const</span> {
+        <span class="k">return</span> BigInteger(value_ + other.value_);
+    }
+
+    <span class="k">int</span> Value() <span class="k">const</span> {
+        <span class="k">return</span> value_;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> value_;
+};
+
+<span class="k">int</span> main() {
+    BigInteger a = <span class="num">5</span>;
+    <span class="k">std</span>::cout &lt;&lt; (a + <span class="num">1</span>).Value() &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">std</span>::cout &lt;&lt; (<span class="num">1</span> + a).Value() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет 6 и 6</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ plus_member.cpp</span>
+<span class="e">plus_member.cpp:23:21: error: no match for ‘operator+’</span>
+<span class="e">  (operand types are ‘int’ and ‘BigInteger’)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 24 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что будет?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> BigInteger {
+  <span class="k">public</span>:
+    BigInteger(<span class="k">int</span> value) : value_(value) {
+    }
+
+    BigInteger&amp; operator=(<span class="k">const</span> BigInteger&amp; other) = <span class="k">default</span>;
+
+    BigInteger&amp; operator+=(<span class="k">const</span> BigInteger&amp; other) {
+        value_ += other.value_;
+        <span class="k">return</span> *this;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> value_;
+};
+
+BigInteger operator+(BigInteger a, <span class="k">const</span> BigInteger&amp; b) {
+    a += b;
+    <span class="k">return</span> a;
+}
+
+<span class="k">int</span> main() {
+    BigInteger a = <span class="num">1</span>;
+    BigInteger b = <span class="num">2</span>;
+    a + b = <span class="num">5</span>;
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"compiled\n"</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt correct"><span class="n">2</span><span>выведет compiled</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">compiled</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 25 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если operator= с &?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> BigInteger {
+  <span class="k">public</span>:
+    BigInteger(<span class="k">int</span> value) : value_(value) {
+    }
+
+    BigInteger&amp; operator=(<span class="k">const</span> BigInteger&amp; other) &amp; = <span class="k">default</span>;
+
+    BigInteger&amp; operator+=(<span class="k">const</span> BigInteger&amp; other) {
+        value_ += other.value_;
+        <span class="k">return</span> *this;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> value_;
+};
+
+BigInteger operator+(BigInteger a, <span class="k">const</span> BigInteger&amp; b) {
+    a += b;
+    <span class="k">return</span> a;
+}
+
+<span class="k">int</span> main() {
+    BigInteger a = <span class="num">1</span>;
+    BigInteger b = <span class="num">2</span>;
+    a + b = <span class="num">5</span>;
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"compiled\n"</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>выведет compiled</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ assign_to_sum_ref.cpp</span>
+<span class="e">assign_to_sum_ref.cpp:27:13: error: passing ‘BigInteger’ as ‘this’</span>
+<span class="e">  argument</span>
+<span class="e">  discards qualifiers [-fpermissive]</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 26 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Сколько копий в каждой функции?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm">// Number: int value_, operator+=</span>
+<span class="cm">// и счётчик Number::copies в конструкторе копирования</span>
+
+Number PlusReturnSeparately(<span class="k">const</span> Number&amp; a, <span class="k">const</span> Number&amp; b) {
+    Number result = a;
+    result += b;
+    <span class="k">return</span> result;
+}
+
+Number PlusReturnExpression(<span class="k">const</span> Number&amp; a, <span class="k">const</span> Number&amp; b) {
+    Number result = a;
+    <span class="k">return</span> result += b;
+}
+
+<span class="k">int</span> main() {
+    Number x = <span class="num">1</span>;
+    Number y = <span class="num">2</span>;
+    Number::copies = <span class="num">0</span>;
+    Number s1 = PlusReturnSeparately(x, y);
+    <span class="k">std</span>::cout &lt;&lt; Number::copies &lt;&lt; <span class="s">'\n'</span>;
+    Number::copies = <span class="num">0</span>;
+    Number s2 = PlusReturnExpression(x, y);
+    <span class="k">std</span>::cout &lt;&lt; Number::copies &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>1
+1</span></div><div class="opt correct"><span class="n">2</span><span>1
+2</span></div><div class="opt"><span class="n">3</span><span>2
+2</span></div><div class="opt"><span class="n">4</span><span>0
+1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1</span>
+<span class="o">2</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 27 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="k">class</span> Counter {
+  <span class="k">public</span>:
+    <span class="k">static</span> <span class="k">int</span> copies;  <span class="cm">// увеличивает конструктор копирования</span>
+
+    Counter&amp; operator++() {
+        ++value_;
+        <span class="k">return</span> *this;
+    }
+
+    Counter operator++(<span class="k">int</span>) {
+        Counter old = *this;
+        ++value_;
+        <span class="k">return</span> old;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> value_ = <span class="num">0</span>;
+};
+
+<span class="k">int</span> main() {
+    Counter c;
+    ++c;
+    <span class="k">std</span>::cout &lt;&lt; Counter::copies &lt;&lt; <span class="s">'\n'</span>;
+    c++;
+    <span class="k">std</span>::cout &lt;&lt; Counter::copies &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>0
+1</span></div><div class="opt"><span class="n">2</span><span>0
+0</span></div><div class="opt"><span class="n">3</span><span>1
+1</span></div><div class="opt"><span class="n">4</span><span>1
+2</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">0</span>
+<span class="o">1</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 28 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Как реализовать operator&gt; через operator&lt;?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">bool</span> operator&lt;(<span class="k">const</span> BigInteger&amp; a, <span class="k">const</span> BigInteger&amp; b);
+
+<span class="k">bool</span> operator&gt;(<span class="k">const</span> BigInteger&amp; a, <span class="k">const</span> BigInteger&amp; b) {
+    <span class="k">return</span> ...;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>!(a < b)</span></div><div class="opt"><span class="n">2</span><span>!(a <= b)</span></div><div class="opt correct"><span class="n">3</span><span>b < a</span></div><div class="opt"><span class="n">4</span><span>!(a < b) && !(a == b)</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><pre class="code small"><span class="k">bool</span> operator&gt;(<span class="k">const</span> BigInteger&amp; a, <span class="k">const</span> BigInteger&amp; b) {
+    <span class="k">return</span> b &lt; a;
+}</pre></div></div></div></div>
+  </div>
+</section>
+
+<!-- 29 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин · опционально" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;compare&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Point {
+    <span class="k">int</span> x;
+    <span class="k">int</span> y;
+
+    <span class="k">auto</span> operator&lt;=&gt;(<span class="k">const</span> Point&amp; other) <span class="k">const</span> = <span class="k">default</span>;
+};
+
+<span class="k">int</span> main() {
+    Point a{<span class="num">1</span>, <span class="num">2</span>};
+    Point b{<span class="num">1</span>, <span class="num">3</span>};
+    <span class="k">std</span>::cout &lt;&lt; (a &lt; b) &lt;&lt; (a &gt; b) &lt;&lt; (a == b) &lt;&lt; (a != b) &lt;&lt; (a &lt;= b) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>10011</span></div><div class="opt"><span class="n">2</span><span>01010</span></div><div class="opt"><span class="n">3</span><span>10101</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">10011</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 30 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> String {
+  <span class="k">public</span>:
+    operator <span class="k">bool</span>() <span class="k">const</span> {
+        <span class="k">return</span> size_ != <span class="num">0</span>;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_ = <span class="num">3</span>;
+};
+
+<span class="k">int</span> main() {
+    String s;
+    <span class="k">if</span> (s) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"not empty\n"</span>;
+    }
+    <span class="k">int</span> n = s + <span class="num">1</span>;
+    <span class="k">std</span>::cout &lt;&lt; n &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt correct"><span class="n">4</span><span>выведет not empty и 2</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">not empty</span>
+<span class="o">2</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 31 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если explicit operator bool?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> String {
+  <span class="k">public</span>:
+    explicit operator <span class="k">bool</span>() <span class="k">const</span> {
+        <span class="k">return</span> size_ != <span class="num">0</span>;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">size_t</span> size_ = <span class="num">3</span>;
+};
+
+<span class="k">int</span> main() {
+    String s;
+    <span class="k">if</span> (s) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"not empty\n"</span>;
+    }
+    <span class="k">int</span> n = s + <span class="num">1</span>;
+    <span class="k">std</span>::cout &lt;&lt; n &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>выведет not empty и 2</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ explicit_bool_explicit.cpp</span>
+<span class="e">explicit_bool_explicit.cpp:18:15: error: no match for ‘operator+’</span>
+<span class="e">  (operand types are ‘String’ and ‘int’)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 32 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Point {
+    <span class="k">int</span> x;
+    <span class="k">int</span> y;
+};
+
+<span class="k">void</span> operator&lt;&lt;(<span class="k">std</span>::ostream&amp; out, <span class="k">const</span> Point&amp; p) {
+    out &lt;&lt; <span class="s">'('</span> &lt;&lt; p.x &lt;&lt; <span class="s">", "</span> &lt;&lt; p.y &lt;&lt; <span class="s">')'</span>;
+}
+
+<span class="k">int</span> main() {
+    Point p{<span class="num">1</span>, <span class="num">2</span>};
+    <span class="k">std</span>::cout &lt;&lt; p &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет (1, 2)</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ ostream_void.cpp</span>
+<span class="e">ostream_void.cpp:14:20: error: invalid operands of types ‘void’ and ‘char’</span>
+<span class="e">  to binary ‘operator&lt;&lt;’</span></div></div></div><div class="reveal" data-label="как правильно  →"><div class="stack"><pre class="code small"><span class="k">std</span>::ostream&amp; operator&lt;&lt;(<span class="k">std</span>::ostream&amp; out, <span class="k">const</span> Point&amp; p) {
+    out &lt;&lt; <span class="s">'('</span> &lt;&lt; p.x &lt;&lt; <span class="s">", "</span> &lt;&lt; p.y &lt;&lt; <span class="s">')'</span>;
+    <span class="k">return</span> out;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">(1, 2)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 33 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если const std::ostream&?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Point {
+    <span class="k">int</span> x;
+    <span class="k">int</span> y;
+};
+
+<span class="k">std</span>::ostream&amp; operator&lt;&lt;(<span class="k">const</span> <span class="k">std</span>::ostream&amp; out, <span class="k">const</span> Point&amp; p) {
+    out &lt;&lt; <span class="s">'('</span> &lt;&lt; p.x &lt;&lt; <span class="s">", "</span> &lt;&lt; p.y &lt;&lt; <span class="s">')'</span>;
+    <span class="k">return</span> out;
+}
+
+<span class="k">int</span> main() {
+    Point p{<span class="num">1</span>, <span class="num">2</span>};
+    <span class="k">std</span>::cout &lt;&lt; p &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет (1, 2)</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ ostream_const.cpp</span>
+<span class="e">ostream_const.cpp:9:9: error: no match for ‘operator&lt;&lt;’</span>
+<span class="e">  (operand types are ‘const std::ostream’ and ‘char’)</span>
+<span class="o">…ещё несколько десятков строк</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 34 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа на вводе 3/4?</h2>
+<div class="cols two"><div class="stack"><span class="label">ввод: 3/4</span><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> Fraction {
+  <span class="k">public</span>:
+    friend <span class="k">std</span>::istream&amp; operator&gt;&gt;(<span class="k">std</span>::istream&amp; in, Fraction&amp; f);
+
+    <span class="k">double</span> Value() <span class="k">const</span> {
+        <span class="k">return</span> <span class="k">static_cast</span>&lt;<span class="k">double</span>&gt;(numerator_) / denominator_;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> numerator_ = <span class="num">0</span>;
+    <span class="k">int</span> denominator_ = <span class="num">1</span>;
+};
+
+<span class="k">std</span>::istream&amp; operator&gt;&gt;(<span class="k">std</span>::istream&amp; in, Fraction&amp; f) {
+    <span class="k">char</span> slash = <span class="num">0</span>;
+    in &gt;&gt; f.numerator_ &gt;&gt; slash &gt;&gt; f.denominator_;
+    <span class="k">return</span> in;
+}
+
+<span class="k">int</span> main() {
+    Fraction f;
+    <span class="k">std</span>::cin &gt;&gt; f;
+    <span class="k">std</span>::cout &lt;&lt; f.Value() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>0.75</span></div><div class="opt"><span class="n">2</span><span>CE</span></div><div class="opt"><span class="n">3</span><span>0</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">echo 3/4 | ./a.out</span>
+<span class="o">0.75</span></div></div></div><div class="reveal" data-label="а без строки с friend?  →"><div class="term small"><span class="p">$</span> <span class="c">g++ istream_no_friend.cpp</span>
+<span class="e">istream_no_friend.cpp:17:13: error: 'int Fraction::numerator_' is private</span>
+<span class="e">  within this context</span>
+<span class="e">istream_no_friend.cpp:17:38: error: 'int Fraction::denominator_' is</span>
+<span class="e">  private within this context</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 35 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Сколько копий в каждой функции?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm">// Number: int value_, operator+=</span>
+<span class="cm">// и счётчик Number::copies в конструкторе копирования</span>
+
+Number PlusReturnSeparately(<span class="k">const</span> Number&amp; a, <span class="k">const</span> Number&amp; b) {
+    Number result = a;
+    result += b;
+    <span class="k">return</span> result;
+}
+
+Number PlusReturnExpression(<span class="k">const</span> Number&amp; a, <span class="k">const</span> Number&amp; b) {
+    Number result = a;
+    <span class="k">return</span> result += b;
+}
+
+<span class="k">int</span> main() {
+    Number x = <span class="num">1</span>;
+    Number y = <span class="num">2</span>;
+    Number::copies = <span class="num">0</span>;
+    Number s1 = PlusReturnSeparately(x, y);
+    <span class="k">std</span>::cout &lt;&lt; Number::copies &lt;&lt; <span class="s">'\n'</span>;
+    Number::copies = <span class="num">0</span>;
+    Number s2 = PlusReturnExpression(x, y);
+    <span class="k">std</span>::cout &lt;&lt; Number::copies &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>1
+1</span></div><div class="opt correct"><span class="n">2</span><span>1
+2</span></div><div class="opt"><span class="n">3</span><span>2
+2</span></div><div class="opt"><span class="n">4</span><span>0
+1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1</span>
+<span class="o">2</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 36 -->
+<section class="slide" data-sec="Дебильник" data-time="15 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Дебильник</span></div><h2>Дебильник №1</h2>
+<div style="display:flex;flex-direction:column;align-items:center;gap:18px">
+<img src="data:image/png;base64,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1gQUtjU/VxMgQIAAAQIEtgsobNuJ3YAAAQIECBAgsCagsK35uZoAAQIECBAgsF3gtf0Oh91gzhk90Rgjmnd6WHre9D7Sfs6XFj0r7/Tn+fTznbXN99Oc/vu13/ed3fnJ6c+LN2x3Ph3uTYAAAQIECBC4IKCwXUDyFQIECBAgQIDAnQIK25367k2AAAECBAgQuCCgsF1A8hUCBAgQIECAwJ0CCtud+u5NgAABAgQIELggoLBdQPIVAgQIECBAgMCdAgrbnfruTYAAAQIECBC4IKCwXUDyFQIECBAgQIDAnQIK25367k2AAAECBAgQuCCgsF1A8hUCBAgQIECAwJ0CCtud+u5NgAABAgQIELggoLBdQPIVAgQIECBAgMCdAgrbnfruTYAAAQIECBC4IKCwXUDyFQIECBAgQIDAnQIK25367k2AAAECBAgQuCCgsF1A8hUCBAgQIECAwJ0CCtud+u5NgAABAgQIELggoLBdQPIVAgQIECBAgMCdAgrbnfruTYAAAQIECBC4IPC68J2qr4wxjp5nznn0+U4/XNrP83LWxtP7SD8vaa3Tz5feR9ovnfe0edN+6ec5vY/0+dJ+3rClReURIECAAAECBMICClsYVBwBAgQIECBAIC2gsKVF5REgQIAAAQIEwgIKWxhUHAECBAgQIEAgLaCwpUXlESBAgAABAgTCAgpbGFQcAQIECBAgQCAtoLClReURIECAAAECBMICClsYVBwBAgQIECBAIC2gsKVF5REgQIAAAQIEwgIKWxhUHAECBAgQIEAgLaCwpUXlESBAgAABAgTCAgpbGFQcAQIECBAgQCAtoLClReURIECAAAECBMICClsYVBwBAgQIECBAIC2gsKVF5REgQIAAAQIEwgIKWxhUHAECBAgQIEAgLaCwpUXlESBAgAABAgTCAgpbGFQcAQIECBAgQCAtoLClReURIECAAAECBMICY/75k8wcYyTj/gkfL3q2HWGn+51+vh07kUngqsDTfh/pea86+97vCKT///dpz0vazxu233nu3YUAAQIECBAg8LGAwvYxnQsJECBAgAABAr8joLD9jrO7ECBAgAABAgQ+FlDYPqZzIQECBAgQIEDgdwQUtt9xdhcCBAgQIECAwMcCCtvHdC4kQIAAAQIECPyOgML2O87uQoAAAQIECBD4WEBh+5jOhQQIECBAgACB3xFQ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" style="width:420px;height:420px;image-rendering:pixelated;background:#fff;padding:16px;border-radius:12px">
+<div style="font-size:30px"><code>forms.gle/KyARVkB4GDknVZk27</code></div>
+<div style="font-size:24px">10 вопросов · 15 минут · анонимно</div></div>
+  </div>
+</section>
+
+<!-- 37 -->
+<section class="slide" data-sec="Часть 2" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Часть 2</span></div><h2>Часть 2. Наследование</h2>
+
+  </div>
+</section>
+
+<!-- 38 -->
+<section class="slide" data-sec="Вопрос залу" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Где будут CE?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm"> 1  </span><span class="pp">#include &lt;iostream&gt;</span>
+<span class="cm"> 2  </span>
+<span class="cm"> 3  </span><span class="k">class</span> Granny {
+<span class="cm"> 4  </span>  <span class="k">protected</span>:
+<span class="cm"> 5  </span>    <span class="k">int</span> x = <span class="num">0</span>;
+<span class="cm"> 6  </span>    friend <span class="k">class</span> Mom;
+<span class="cm"> 7  </span>};
+<span class="cm"> 8  </span>
+<span class="cm"> 9  </span><span class="k">class</span> Mom : <span class="k">private</span> Granny {
+<span class="cm">10  </span>  <span class="k">private</span>:
+<span class="cm">11  </span>    <span class="k">int</span> y = <span class="num">1</span>;
+<span class="cm">12  </span>
+<span class="cm">13  </span>    <span class="k">void</span> f(Mom m) {
+<span class="cm">14  </span>        Granny&amp; g = m;
+<span class="cm">15  </span>        <span class="k">std</span>::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;
+<span class="cm">16  </span>    }
+<span class="cm">17  </span>    <span class="cm">// friend class Son;</span>
+<span class="cm">18  </span>};
+<span class="cm">19  </span>
+<span class="cm">20  </span><span class="k">class</span> Son : <span class="k">private</span> Mom {
+<span class="cm">21  </span>    <span class="k">void</span> f(Mom m) {
+<span class="cm">22  </span>        Granny&amp; g = m;
+<span class="cm">23  </span>        <span class="k">std</span>::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;
+<span class="cm">24  </span>    }
+<span class="cm">25  </span>};
+<span class="cm">26  </span>
+<span class="cm">27  </span><span class="k">int</span> main() {
+<span class="cm">28  </span>}</pre></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>строка</th><th>код</th><th>скомпилируется?</th></tr><tr><td class="cmd">14</td><td class="dsc"><code>Granny&amp; g = m;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">15</td><td class="dsc"><code>std::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">22</td><td class="dsc"><code>Granny&amp; g = m;</code></td><td class="dsc"><div class="reveal" data-label="?"><b>CE</b></div></td></tr><tr><td class="cmd">23</td><td class="dsc"><code>std::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;</code></td><td class="dsc"><div class="reveal" data-label="?"><b>CE</b>: m.y, m.x, g.x</div></td></tr></table></div><div class="reveal" data-label="что скажет компилятор  →"><div class="term small"><span class="p">$</span> <span class="c">g++ granny.cpp</span>
+<span class="e">granny.cpp:22:9: error: ‘class Granny Granny::Granny’ is private within</span>
+<span class="e">  this context</span>
+<span class="e">granny.cpp:22:21: error: ‘Granny’ is an inaccessible base of ‘Mom’</span>
+<span class="e">granny.cpp:23:24: error: ‘int Mom::y’ is private within this context</span>
+<span class="e">granny.cpp:23:31: error: ‘int Granny::x’ is protected within this context</span>
+<span class="e">granny.cpp:23:38: error: ‘int Granny::x’ is protected within this context</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 39 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если раскомментировать friend class Son?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm"> 1  </span><span class="pp">#include &lt;iostream&gt;</span>
+<span class="cm"> 2  </span>
+<span class="cm"> 3  </span><span class="k">class</span> Granny {
+<span class="cm"> 4  </span>  <span class="k">protected</span>:
+<span class="cm"> 5  </span>    <span class="k">int</span> x = <span class="num">0</span>;
+<span class="cm"> 6  </span>    friend <span class="k">class</span> Mom;
+<span class="cm"> 7  </span>};
+<span class="cm"> 8  </span>
+<span class="cm"> 9  </span><span class="k">class</span> Mom : <span class="k">private</span> Granny {
+<span class="cm">10  </span>  <span class="k">private</span>:
+<span class="cm">11  </span>    <span class="k">int</span> y = <span class="num">1</span>;
+<span class="cm">12  </span>
+<span class="cm">13  </span>    <span class="k">void</span> f(Mom m) {
+<span class="cm">14  </span>        Granny&amp; g = m;
+<span class="cm">15  </span>        <span class="k">std</span>::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;
+<span class="cm">16  </span>    }
+<span class="cm">17  </span>    friend <span class="k">class</span> Son;
+<span class="cm">18  </span>};
+<span class="cm">19  </span>
+<span class="cm">20  </span><span class="k">class</span> Son : <span class="k">private</span> Mom {
+<span class="cm">21  </span>    <span class="k">void</span> f(Mom m) {
+<span class="cm">22  </span>        Granny&amp; g = m;
+<span class="cm">23  </span>        <span class="k">std</span>::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;
+<span class="cm">24  </span>    }
+<span class="cm">25  </span>};
+<span class="cm">26  </span>
+<span class="cm">27  </span><span class="k">int</span> main() {
+<span class="cm">28  </span>}</pre></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>строка</th><th>код</th><th>скомпилируется?</th></tr><tr><td class="cmd">14</td><td class="dsc"><code>Granny&amp; g = m;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">15</td><td class="dsc"><code>std::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">22</td><td class="dsc"><code>Granny&amp; g = m;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">23</td><td class="dsc"><code>std::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;</code></td><td class="dsc"><div class="reveal" data-label="?"><b>CE</b>: g.x</div></td></tr></table></div><div class="reveal" data-label="что скажет компилятор  →"><div class="term small"><span class="p">$</span> <span class="c">g++ granny_friend.cpp</span>
+<span class="e">granny_friend.cpp:23:38: error: ‘int Granny::x’ is protected within this</span>
+<span class="e">  context</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 40 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если наследование protected?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm"> 1  </span><span class="pp">#include &lt;iostream&gt;</span>
+<span class="cm"> 2  </span>
+<span class="cm"> 3  </span><span class="k">class</span> Granny {
+<span class="cm"> 4  </span>  <span class="k">protected</span>:
+<span class="cm"> 5  </span>    <span class="k">int</span> x = <span class="num">0</span>;
+<span class="cm"> 6  </span>    friend <span class="k">class</span> Mom;
+<span class="cm"> 7  </span>};
+<span class="cm"> 8  </span>
+<span class="cm"> 9  </span><span class="k">class</span> Mom : <span class="k">protected</span> Granny {
+<span class="cm">10  </span>  <span class="k">private</span>:
+<span class="cm">11  </span>    <span class="k">int</span> y = <span class="num">1</span>;
+<span class="cm">12  </span>
+<span class="cm">13  </span>    <span class="k">void</span> f(Mom m) {
+<span class="cm">14  </span>        Granny&amp; g = m;
+<span class="cm">15  </span>        <span class="k">std</span>::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;
+<span class="cm">16  </span>    }
+<span class="cm">17  </span>    <span class="cm">// friend class Son;</span>
+<span class="cm">18  </span>};
+<span class="cm">19  </span>
+<span class="cm">20  </span><span class="k">class</span> Son : <span class="k">protected</span> Mom {
+<span class="cm">21  </span>    <span class="k">void</span> f(Mom m) {
+<span class="cm">22  </span>        Granny&amp; g = m;
+<span class="cm">23  </span>        <span class="k">std</span>::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;
+<span class="cm">24  </span>    }
+<span class="cm">25  </span>};
+<span class="cm">26  </span>
+<span class="cm">27  </span><span class="k">int</span> main() {
+<span class="cm">28  </span>}</pre></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>строка</th><th>код</th><th>скомпилируется?</th></tr><tr><td class="cmd">14</td><td class="dsc"><code>Granny&amp; g = m;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">15</td><td class="dsc"><code>std::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">22</td><td class="dsc"><code>Granny&amp; g = m;</code></td><td class="dsc"><div class="reveal" data-label="?">OK</div></td></tr><tr><td class="cmd">23</td><td class="dsc"><code>std::cout &lt;&lt; m.y &lt;&lt; m.x &lt;&lt; g.x;</code></td><td class="dsc"><div class="reveal" data-label="?"><b>CE</b>: m.y, m.x, g.x</div></td></tr></table></div><div class="reveal" data-label="что скажет компилятор  →"><div class="term small"><span class="p">$</span> <span class="c">g++ granny_protected.cpp</span>
+<span class="e">granny_protected.cpp:23:24: error: ‘int Mom::y’ is private within this</span>
+<span class="e">  context</span>
+<span class="e">granny_protected.cpp:23:31: error: ‘int Granny::x’ is protected within</span>
+<span class="e">  this context</span>
+<span class="e">granny_protected.cpp:23:38: error: ‘int Granny::x’ is protected within</span>
+<span class="e">  this context</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 41 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Empty {};
+
+<span class="k">struct</span> WithMember {
+    Empty e;
+    <span class="k">int</span> x;
+};
+
+<span class="k">struct</span> WithBase : Empty {
+    <span class="k">int</span> x;
+};
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(Empty) &lt;&lt; <span class="s">' '</span> &lt;&lt; <span class="k">sizeof</span>(WithMember) &lt;&lt; <span class="s">' '</span>
+              &lt;&lt; <span class="k">sizeof</span>(WithBase) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>1 8 4</span></div><div class="opt"><span class="n">2</span><span>1 8 8</span></div><div class="opt"><span class="n">3</span><span>0 4 4</span></div><div class="opt"><span class="n">4</span><span>1 5 5</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1 8 4</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 42 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>В каком порядке?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="cm">// Field печатает "field &lt;имя&gt;" в конструкторе</span>
+<span class="cm">// и "~field &lt;имя&gt;" в деструкторе</span>
+
+<span class="k">struct</span> Base {
+    Field base_field{<span class="s">"Base"</span>};
+
+    Base() {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Base()\n"</span>;
+    }
+
+    ~Base() {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"~Base()\n"</span>;
+    }
+};
+
+<span class="k">struct</span> Derived : Base {
+    Field derived_field{<span class="s">"Derived"</span>};
+
+    Derived() {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Derived()\n"</span>;
+    }
+
+    ~Derived() {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"~Derived()\n"</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>field Base, Base(), field Derived, Derived()</span></div><div class="opt"><span class="n">2</span><span>Base(), field Base, Derived(), field Derived</span></div><div class="opt"><span class="n">3</span><span>field Derived, Derived(), field Base, Base()</span></div><div class="opt"><span class="n">4</span><span>field Base, field Derived, Base(), Derived()</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">field Base</span>
+<span class="o">Base()</span>
+<span class="o">field Derived</span>
+<span class="o">Derived()</span>
+<span class="o">~Derived()</span>
+<span class="o">~field Derived</span>
+<span class="o">~Base()</span>
+<span class="o">~field Base</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 43 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Можно ли инициализировать поле родителя?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">struct</span> Base {
+    <span class="k">int</span> x = <span class="num">0</span>;
+};
+
+<span class="k">struct</span> Derived : Base {
+    Derived() : x(<span class="num">5</span>) {
+    }
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>компилируется</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ init_parent_field.cpp</span>
+<span class="e">init_parent_field.cpp:6:17: error: class ‘Derived’ does not have any</span>
+<span class="e">  field named ‘x’</span></div></div></div><div class="reveal" data-label="как правильно  →"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Base {
+    <span class="k">int</span> x;
+
+    Base(<span class="k">int</span> value) : x(value) {
+    }
+};
+
+<span class="k">struct</span> Derived : Base {
+    Derived() : Base(<span class="num">5</span>) {
+    }
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+    <span class="k">std</span>::cout &lt;&lt; d.x &lt;&lt; <span class="s">'\n'</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">5</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 44 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Base {
+    <span class="k">void</span> f(<span class="k">int</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Base::f(int)\n"</span>;
+    }
+};
+
+<span class="k">struct</span> Derived : Base {
+    <span class="k">void</span> f(<span class="k">double</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Derived::f(double)\n"</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+    d.f(<span class="num">1</span>);
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>Base::f(int)</span></div><div class="opt correct"><span class="n">2</span><span>Derived::f(double)</span></div><div class="opt"><span class="n">3</span><span>CE: неоднозначность</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">Derived::f(double)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 45 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если добавить using Base::f?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Base {
+    <span class="k">void</span> f(<span class="k">int</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Base::f(int)\n"</span>;
+    }
+};
+
+<span class="k">struct</span> Derived : Base {
+    <span class="k">using</span> Base::f;
+
+    <span class="k">void</span> f(<span class="k">double</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Derived::f(double)\n"</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+    d.f(<span class="num">1</span>);
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>Base::f(int)</span></div><div class="opt"><span class="n">2</span><span>Derived::f(double)</span></div><div class="opt"><span class="n">3</span><span>CE: неоднозначность</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">Base::f(int)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 46 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что будет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> Base {
+  <span class="k">protected</span>:
+    <span class="k">int</span> secret = <span class="num">42</span>;
+};
+
+<span class="k">class</span> Derived : <span class="k">public</span> Base {
+  <span class="k">public</span>:
+    <span class="k">using</span> Base::secret;
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+    <span class="k">std</span>::cout &lt;&lt; d.secret &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt correct"><span class="n">2</span><span>выведет 42</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">42</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 47 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Base {
+    <span class="k">int</span> x;
+
+    Base(<span class="k">int</span> value) : x(value) {
+    }
+};
+
+<span class="k">struct</span> Derived : Base {
+    <span class="k">using</span> Base::Base;
+};
+
+<span class="k">int</span> main() {
+    Derived d(<span class="num">5</span>);
+    <span class="k">std</span>::cout &lt;&lt; d.x &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>5</span></div><div class="opt"><span class="n">2</span><span>CE</span></div><div class="opt"><span class="n">3</span><span>0</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">5</span></div></div></div><div class="reveal" data-label="а если Derived d(b)?  →"><div class="stack"><pre class="code small">Base b(<span class="num">5</span>);
+Derived d(b);</pre><div class="term small"><span class="p">$</span> <span class="c">g++ using_ctor_copy.cpp</span>
+<span class="e">using_ctor_copy.cpp:14:16: error: no matching function for call to</span>
+<span class="e">  ‘Derived::Derived(Base&amp;)’</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 48 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> Ellipse {
+  <span class="k">public</span>:
+    <span class="k">void</span> SetSize(<span class="k">double</span> width, <span class="k">double</span> height) {
+        width_ = width;
+        height_ = height;
+    }
+
+    <span class="k">double</span> Width() <span class="k">const</span> {
+        <span class="k">return</span> width_;
+    }
+
+    <span class="k">double</span> Height() <span class="k">const</span> {
+        <span class="k">return</span> height_;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">double</span> width_ = <span class="num">1</span>;
+    <span class="k">double</span> height_ = <span class="num">1</span>;
+};
+
+<span class="k">class</span> Circle : <span class="k">public</span> Ellipse {
+  <span class="k">public</span>:
+    <span class="k">double</span> Radius() <span class="k">const</span> {
+        <span class="k">return</span> Width() / <span class="num">2</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Circle c;
+    c.SetSize(<span class="num">2</span>, <span class="num">6</span>);
+    <span class="k">std</span>::cout &lt;&lt; c.Radius() &lt;&lt; <span class="s">' '</span> &lt;&lt; c.Width() &lt;&lt; <span class="s">' '</span> &lt;&lt; c.Height() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>1 2 6</span></div><div class="opt"><span class="n">2</span><span>1 2 2</span></div><div class="opt"><span class="n">3</span><span>3 6 6</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1 2 6</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 49 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Base {
+    <span class="k">int</span> a = <span class="num">1</span>;
+
+    <span class="k">void</span> Print() <span class="k">const</span> {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Base "</span> &lt;&lt; a &lt;&lt; <span class="s">'\n'</span>;
+    }
+};
+
+<span class="k">struct</span> Derived : Base {
+    <span class="k">int</span> b = <span class="num">2</span>;
+
+    <span class="k">void</span> Print() <span class="k">const</span> {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Derived "</span> &lt;&lt; a &lt;&lt; <span class="s">' '</span> &lt;&lt; b &lt;&lt; <span class="s">'\n'</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+    d.a = <span class="num">10</span>;
+    Base b = d;
+    b.Print();
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(b) &lt;&lt; <span class="s">' '</span> &lt;&lt; <span class="k">sizeof</span>(d) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>Base 10
+4 8</span></div><div class="opt"><span class="n">2</span><span>Derived 10 2
+8 8</span></div><div class="opt"><span class="n">3</span><span>Base 1
+4 8</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">Base 10</span>
+<span class="o">4 8</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 50 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Base {
+    <span class="k">int</span> a = <span class="num">1</span>;
+};
+
+<span class="k">struct</span> Derived : Base {
+    <span class="k">int</span> b = <span class="num">2</span>;
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+    Base&amp; from_derived = d;
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">static_cast</span>&lt;Derived&amp;&gt;(from_derived).b &lt;&lt; <span class="s">'\n'</span>;
+
+    Base base;
+    Base&amp; from_base = base;
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">static_cast</span>&lt;Derived&amp;&gt;(from_base).b &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt correct"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет 2 и 2</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">2</span>
+<span class="o">338472800</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 51 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Можно ли привести к базе?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">struct</span> Base {
+    <span class="k">int</span> a = <span class="num">1</span>;
+};
+
+<span class="k">struct</span> Derived : <span class="k">private</span> Base {
+};
+
+<span class="k">int</span> main() {
+    Derived d;
+    Base&amp; b = d;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>компилируется</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ private_cast.cpp</span>
+<span class="e">private_cast.cpp:10:15: error: ‘Base’ is an inaccessible base of ‘Derived’</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 52 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Компилируется или CE?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="cm"> 1  </span><span class="pp">#include &lt;iostream&gt;</span>
+<span class="cm"> 2  </span>
+<span class="cm"> 3  </span><span class="k">struct</span> Granny {
+<span class="cm"> 4  </span>    <span class="k">int</span> x = <span class="num">1</span>;
+<span class="cm"> 5  </span>};
+<span class="cm"> 6  </span>
+<span class="cm"> 7  </span><span class="k">struct</span> Mom : Granny {
+<span class="cm"> 8  </span>};
+<span class="cm"> 9  </span>
+<span class="cm">10  </span><span class="k">struct</span> Son : Mom, Granny {
+<span class="cm">11  </span>};
+<span class="cm">12  </span>
+<span class="cm">13  </span><span class="k">int</span> main() {
+<span class="cm">14  </span>    Son s;
+<span class="cm">15  </span>    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(s) &lt;&lt; <span class="s">'\n'</span>;
+<span class="cm">16  </span>    <span class="k">std</span>::cout &lt;&lt; s.x &lt;&lt; <span class="s">'\n'</span>;
+<span class="cm">17  </span>}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>компилируется</span></div><div class="opt correct"><span class="n">2</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ diamond_twice.cpp</span>
+<span class="w">diamond_twice.cpp:10:8: warning: direct base ‘Granny’ inaccessible in</span>
+<span class="w">  ‘Son’ due to ambiguity</span>
+<span class="e">diamond_twice.cpp:16:20: error: request for member ‘x’ is ambiguous</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 53 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Granny {
+    <span class="k">int</span> x = <span class="num">1</span>;
+};
+
+<span class="k">struct</span> Mom : Granny {
+};
+
+<span class="k">struct</span> Dad : Granny {
+};
+
+<span class="k">struct</span> Son : Mom, Dad {
+};
+
+<span class="k">int</span> main() {
+    Son s;
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(s) &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">std</span>::cout &lt;&lt; s.Mom::x &lt;&lt; <span class="s">' '</span> &lt;&lt; s.Dad::x &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">std</span>::cout &lt;&lt; s.x &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет 8, 1 1, 1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ diamond.cpp</span>
+<span class="e">diamond.cpp:20:20: error: request for member ‘x’ is ambiguous</span></div></div></div><div class="reveal" data-label="а без s.x  →"><div class="term small"><span class="p">$</span> <span class="c">./a.out   # без строки с s.x</span>
+<span class="o">8</span>
+<span class="o">1 1</span></div></div></div></div>
+  </div>
+</section>
+
+<!-- 54 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если virtual?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Granny {
+    <span class="k">int</span> x = <span class="num">1</span>;
+};
+
+<span class="k">struct</span> Mom : virtual Granny {
+};
+
+<span class="k">struct</span> Dad : virtual Granny {
+};
+
+<span class="k">struct</span> Son : Mom, Dad {
+};
+
+<span class="k">int</span> main() {
+    Son s;
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(s) &lt;&lt; <span class="s">'\n'</span>;
+
+    <span class="k">std</span>::cout &lt;&lt; s.x &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>24
+1</span></div><div class="opt"><span class="n">2</span><span>8
+1</span></div><div class="opt"><span class="n">3</span><span>16
+1</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">24</span>
+<span class="o">1</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 55 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Granny {
+    Granny(<span class="k">int</span> value) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Granny("</span> &lt;&lt; value &lt;&lt; <span class="s">")\n"</span>;
+    }
+};
+
+<span class="k">struct</span> Mom : virtual Granny {
+    Mom() : Granny(<span class="num">1</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Mom()\n"</span>;
+    }
+};
+
+<span class="k">struct</span> Dad : virtual Granny {
+    Dad() : Granny(<span class="num">2</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Dad()\n"</span>;
+    }
+};
+
+<span class="k">struct</span> Son : Mom, Dad {
+    Son() : Granny(<span class="num">3</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"Son()\n"</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    Son s;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>Granny(3), Mom(), Dad(), Son()</span></div><div class="opt"><span class="n">2</span><span>Granny(1), Mom(), Granny(2), Dad(), Son()</span></div><div class="opt"><span class="n">3</span><span>Granny(1), Mom(), Dad(), Son()</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">Granny(3)</span>
+<span class="o">Mom()</span>
+<span class="o">Dad()</span>
+<span class="o">Son()</span></div></div></div><div class="reveal" data-label="а если Son не вызывает Granny?  →"><div class="stack"><pre class="code small">Son() {
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"Son()\n"</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ virtual_order_noinit.cpp</span>
+<span class="e">virtual_order_noinit.cpp:22:11: error: no matching function for call to</span>
+<span class="e">  ‘Granny::Granny()’</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 56 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если Mom — virtual, а Dad — нет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> Granny {
+    <span class="k">int</span> x = <span class="num">1</span>;
+};
+
+<span class="k">struct</span> Mom : virtual Granny {
+};
+
+<span class="k">struct</span> Dad : Granny {
+};
+
+<span class="k">struct</span> Son : Mom, Dad {
+};
+
+<span class="k">int</span> main() {
+    Son s;
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(s) &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">std</span>::cout &lt;&lt; s.x &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет 24 и 1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ mixed_virtual.cpp</span>
+<span class="w">mixed_virtual.cpp:13:8: warning: virtual base ‘Granny’ inaccessible in</span>
+<span class="w">  ‘Son’ due to ambiguity</span>
+<span class="e">mixed_virtual.cpp:19:20: error: request for member ‘x’ is ambiguous</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 57 -->
+<section class="slide" data-sec="Ромб" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Ромб</span></div><h2>Как ромб лежит в памяти</h2>
+<div class="stack"><style>.buf .ch.ptr, .buf-legend i.ptr { background: color-mix(in srgb, #8A7CA0 25%, var(--paper)); border-color: #8A7CA0; } .buf .ch.vx, .buf-legend i.vx { background: color-mix(in srgb, #E8C468 35%, var(--paper)); border-color: #C9A227; }</style><span class="label">Mom : Granny, Dad : Granny — 8 байт</span><div class="buf" style="font-size:1.15em"><span class="ch g">x</span><span class="ch g">x</span><span class="ch g">x</span><span class="ch g">x</span><span style="width:18px"></span><span class="ch g">x</span><span class="ch g">x</span><span class="ch g">x</span><span class="ch g">x</span></div><span class="label">Mom : virtual Granny, Dad : virtual Granny — 24 байта</span><div class="buf" style="font-size:1.15em"><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span style="width:18px"></span><span class="ch ptr">D</span><span class="ch ptr">D</span><span class="ch ptr">D</span><span class="ch ptr">D</span><span class="ch ptr">D</span><span class="ch ptr">D</span><span class="ch ptr">D</span><span class="ch ptr">D</span><span style="width:18px"></span><span class="ch vx">x</span><span class="ch vx">x</span><span class="ch vx">x</span><span class="ch vx">x</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span></div><span class="label">Mom : virtual Granny, Dad : Granny — 16 байт</span><div class="buf" style="font-size:1.15em"><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span class="ch ptr">M</span><span style="width:18px"></span><span class="ch g">x</span><span class="ch g">x</span><span class="ch g">x</span><span class="ch g">x</span><span style="width:18px"></span><span class="ch vx">x</span><span class="ch vx">x</span><span class="ch vx">x</span><span class="ch vx">x</span></div><div class="buf-legend"><span><i class="ptr"></i>скрытый указатель Mom (M) / Dad (D)</span><span><i class="g"></i>обычная Granny::x</span><span><i class="vx"></i>виртуальная (общая) Granny::x</span><span><i class="rest"></i>пустые байты</span></div></div>
+  </div>
+</section>
+
+<!-- 58 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Можно ли static_cast от виртуальной базы вниз?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">struct</span> Granny {
+    <span class="k">int</span> x = <span class="num">1</span>;
+};
+
+<span class="k">struct</span> Mom : virtual Granny {
+};
+
+<span class="k">struct</span> Son : Mom {
+};
+
+<span class="k">int</span> main() {
+    Son s;
+    Granny&amp; g = s;
+    Son&amp; back = <span class="k">static_cast</span>&lt;Son&amp;&gt;(g);
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>компилируется</span></div><div class="opt"><span class="n">3</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ virtual_static_cast.cpp</span>
+<span class="e">virtual_static_cast.cpp:14:36: error: cannot convert from pointer to base</span>
+<span class="e">  class ‘Granny’</span>
+<span class="e">  to pointer to derived class ‘Son’ because the base is virtual</span></div></div></div></div></div>
+  </div>
+</section>
+
+</div>
+
+<div id="notes" hidden><h4>Заметки семинаристу<span id="notes-time"></span></h4><ul id="notes-body"></ul></div>
+
+<div class="bar">
+  <button id="prev" aria-label="Предыдущий слайд">←</button>
+  <button id="next" aria-label="Дальше">→</button>
+  <span class="counter"><b id="cur">1</b> / <span id="total">0</span></span>
+  <button id="timer" hidden>таймер 0:00</button>
+  <span class="spacer"></span>
+  <span class="counter" id="secname"></span>
+  <span class="keys-hint">→ дальше и ответы · T таймер · D тема</span>
+  
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var notes = document.getElementById('notes');
+  var notesBody = document.getElementById('notes-body');
+  var notesOpen = false;
+
+  var timerBtn = document.getElementById('timer');
+  var tLeft = 0, tOwner = -1, tRunning = false, tHandle = null;
+
+  function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  function drawTimer() {
+    if (timerBtn.classList.contains('done')) { timerBtn.textContent = 'время вышло'; return; }
+    timerBtn.textContent = (tRunning ? 'идёт ' : 'таймер ') + fmt(tLeft);
+  }
+  function stopTimer() { tRunning = false; clearInterval(tHandle); timerBtn.classList.remove('running'); }
+  function toggleTimer() {
+    if (timerBtn.hidden) return;
+    if (timerBtn.classList.contains('done')) {
+      timerBtn.classList.remove('done');
+      tLeft = +(slides[tOwner] && slides[tOwner].dataset.timer || 0);
+      drawTimer(); return;
+    }
+    if (tRunning) { stopTimer(); drawTimer(); return; }
+    if (tLeft <= 0) return;
+    tRunning = true; timerBtn.classList.add('running');
+    tHandle = setInterval(function () {
+      tLeft -= 1;
+      if (tLeft <= 0) { tLeft = 0; stopTimer(); timerBtn.classList.add('done'); }
+      drawTimer();
+    }, 1000);
+    drawTimer();
+  }
+
+  document.getElementById('total').textContent = slides.length;
+
+  function render() {
+    slides.forEach(function (s, n) { s.classList.toggle('is-active', n === i); });
+    var s = slides[i];
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('progress').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('secname').textContent = s.dataset.sec || '';
+    notesBody.innerHTML = s.dataset.notes || '<li>—</li>';
+    var t = s.dataset.time || '';
+    document.getElementById('notes-time').textContent = t ? '  ·  ' + t : '';
+
+    var dur = +(s.dataset.timer || 0);
+    if (dur && !tRunning && tOwner !== i) {
+      tLeft = dur; tOwner = i; timerBtn.classList.remove('done');
+    }
+    timerBtn.hidden = !(dur || tRunning);
+    drawTimer();
+
+    window.scrollTo(0, 0);
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+  }
+
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  function show(r) {
+    r.classList.add('shown');
+    if (r.hasAttribute('data-answer')) {
+      var sl = r.closest('.slide');
+      if (sl) sl.classList.add('answered');
+    }
+  }
+  function revealNext() {
+    var r = slides[i].querySelector('.reveal:not(.shown)');
+    if (r) { show(r); return true; }
+    return false;
+  }
+  function next() { if (!revealNext()) go(i + 1); }
+
+  function toggleNotes() {
+    notesOpen = !notesOpen;
+    notes.hidden = !notesOpen;
+    document.getElementById('notes-btn').classList.toggle('on', notesOpen);
+  }
+  function toggleTheme() {
+    var root = document.documentElement;
+    var cur = root.getAttribute('data-theme');
+    if (!cur) cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.reveal'), function (r) {
+    r.setAttribute('tabindex', '0');
+    r.setAttribute('role', 'button');
+    r.addEventListener('click', function () { if (!r.classList.contains('shown')) show(r); });
+    r.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter') && !r.classList.contains('shown')) { e.preventDefault(); e.stopPropagation(); show(r); }
+    });
+  });
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', function () { go(i - 1); });
+  
+  timerBtn.addEventListener('click', toggleTimer);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); next(); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (k === 'Home') { e.preventDefault(); go(0); }
+    else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
+    
+    else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); toggleTimer(); }
+    else if (k === 'r' || k === 'R' || k === 'к' || k === 'К') {
+      e.preventDefault();
+      Array.prototype.forEach.call(slides[i].querySelectorAll('.reveal:not(.shown)'), show);
+    }
+    else if (k === 'd' || k === 'D' || k === 'в' || k === 'В') { e.preventDefault(); toggleTheme(); }
+    else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') {
+      e.preventDefault();
+      if (document.fullscreenElement) { document.exitFullscreen(); }
+      else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
+    }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) { i = Math.max(0, Math.min(slides.length - 1, parseInt(m[1], 10) - 1)); }
+  render();
+})();
+</script>
+
+</body>
+</html>

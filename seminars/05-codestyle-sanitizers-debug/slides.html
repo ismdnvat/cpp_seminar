@@ -1,0 +1,1117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;font:14px/1.5 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Кодстайл, санитайзеры и отладка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* ── Палитра снята с диагностики gcc/clang: magenta = warning, cyan = note,
+      red = error, green = приглашение шелла. Нейтрали уведены в фиолетовый. ── */
+:root {
+  --paper:      #FAF8FC;
+  --paper-2:    #F1EDF6;
+  --rail:       #E4DCEE;
+  --ink:        #1B1524;
+  --ink-soft:   #57496B;
+  --ink-faint:  #8A7CA0;
+  --accent:     #B01490;
+  --accent-dim: #F6E4F3;
+  --note:       #0B6F7C;
+  --err:        #C42430;
+  --ok:         #12704F;
+  --term-bg:    #211A2C;
+  --term-fg:    #EDE6F4;
+  --term-dim:   #A493B8;
+  --shadow:     0 1px 2px rgba(27,21,36,.06), 0 12px 32px -18px rgba(27,21,36,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #150F1D;
+    --paper-2:    #1E1729;
+    --rail:       #322646;
+    --ink:        #F2ECF8;
+    --ink-soft:   #B5A6C8;
+    --ink-faint:  #7E6E94;
+    --accent:     #F175D2;
+    --accent-dim: #2C1B31;
+    --note:       #52CFDA;
+    --err:        #FF7A80;
+    --ok:         #4FD9A7;
+    --term-bg:    #0D0913;
+    --term-fg:    #EDE6F4;
+    --term-dim:   #9585AA;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#150F1D; --paper-2:#1E1729; --rail:#322646; --ink:#F2ECF8;
+  --ink-soft:#B5A6C8; --ink-faint:#7E6E94; --accent:#F175D2; --accent-dim:#2C1B31;
+  --note:#52CFDA; --err:#FF7A80; --ok:#4FD9A7; --term-bg:#0D0913; --term-fg:#EDE6F4;
+  --term-dim:#9585AA;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(15px, 1.35vw, 19px);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .display {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+code, kbd, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+
+/* ── каркас колоды ── */
+.progress {
+  position: fixed; inset: 0 auto auto 0; height: 3px; width: 0;
+  background: var(--accent); z-index: 40; transition: width .25s ease;
+}
+.deck { min-height: 100svh; display: flex; flex-direction: column; }
+.slide {
+  display: none;
+  flex: 1; min-height: 100svh;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1.1rem, 5vw, 5rem) clamp(4.5rem, 8vh, 6rem);
+  flex-direction: column; justify-content: center; gap: clamp(1rem, 2.2vh, 1.9rem);
+}
+.slide.is-active { display: flex; }
+.wrap { width: 100%; max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: clamp(.9rem, 2vh, 1.7rem); }
+
+/* ── шапка слайда: секция + бюджет времени ── */
+.eyebrow { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; }
+.eyebrow .sec {
+  font-family: "JetBrains Mono", monospace; font-size: .72em; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+.eyebrow .clock {
+  font-family: "JetBrains Mono", monospace; font-size: .7em; color: var(--ink-faint);
+  border: 1px solid var(--rail); border-radius: 999px; padding: .1em .7em;
+  font-variant-numeric: tabular-nums;
+}
+h2 { font-size: clamp(1.8rem, 4.2vw, 3.3rem); }
+.sub { color: var(--ink-soft); max-width: 62ch; font-size: 1.06em; }
+
+/* ── терминал ── */
+.term {
+  background: var(--term-bg); color: var(--term-fg); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.4rem) clamp(1rem, 2vw, 1.5rem);
+  font-family: "JetBrains Mono", monospace; font-size: clamp(.78rem, 1.15vw, 1.02rem);
+  line-height: 1.65; overflow-x: auto; box-shadow: var(--shadow);
+  white-space: pre; tab-size: 4;
+}
+.term .p { color: var(--ok); font-weight: 700; }
+.term .c { color: var(--term-fg); font-weight: 700; }
+.term .o { color: var(--term-dim); }
+.term .e { color: #FF7A80; font-weight: 700; }
+.term .w { color: #F175D2; font-weight: 700; }
+.term .n { color: #52CFDA; }
+.term .cm { color: var(--term-dim); font-style: italic; }
+
+/* ── код на «бумаге» ── */
+pre.code {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.3rem) clamp(1rem, 2vw, 1.4rem); margin: 0;
+  font-size: clamp(.8rem, 1.2vw, 1.05rem); line-height: 1.6; overflow-x: auto;
+}
+pre.code .k { color: var(--accent); font-weight: 700; }
+pre.code .s { color: var(--ok); }
+pre.code .pp { color: var(--note); }
+pre.code .cm { color: var(--ink-faint); font-style: italic; }
+pre.code .hl { background: var(--accent-dim); border-radius: 3px; padding: 0 .15em; }
+
+/* ── сетки ── */
+.cols { display: grid; gap: clamp(.8rem, 1.6vw, 1.4rem); }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.cols.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.panel {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 12px;
+  padding: clamp(.9rem, 1.7vw, 1.3rem); display: flex; flex-direction: column; gap: .5rem;
+}
+.panel h3 { font-size: 1.12em; }
+.panel p { margin: 0; color: var(--ink-soft); font-size: .95em; }
+.panel ul { margin: 0; padding-left: 1.1em; color: var(--ink-soft); font-size: .95em; }
+.panel li + li { margin-top: .3em; }
+
+/* один выделенный блок, а не «всё карточки» */
+.pin { background: var(--accent-dim); border-color: transparent; }
+.pin h3 { color: var(--accent); }
+.pin p, .pin ul { color: var(--ink); }
+
+/* ── таблица команд ── */
+table { border-collapse: collapse; width: 100%; font-size: clamp(.82rem, 1.15vw, 1rem); }
+th, td { text-align: left; padding: .42em .8em .42em 0; border-bottom: 1px solid var(--rail); vertical-align: baseline; }
+th { color: var(--ink-faint); font-weight: 600; font-size: .8em; text-transform: uppercase; letter-spacing: .08em; }
+td.cmd { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+td.dsc { color: var(--ink-soft); }
+.table-scroll { overflow-x: auto; }
+
+/* ── таймлайн стандартов: порядок здесь несёт смысл ── */
+.timeline { display: flex; gap: 0; overflow-x: auto; padding-bottom: .4rem; }
+.tl-step { flex: 1 0 auto; min-width: 108px; padding: 0 .75rem; border-left: 2px solid var(--rail); }
+.tl-step:first-child { border-left-color: var(--accent); }
+.tl-step .y { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 1.05em; }
+.tl-step .what { color: var(--ink-soft); font-size: .85em; display: block; margin-top: .2em; }
+.tl-step.now { border-left-color: var(--accent); }
+.tl-step.now .y { color: var(--accent); }
+
+/* ── конвейер сборки: настоящая последовательность, порядок обязателен ── */
+.pipe { display: flex; align-items: stretch; gap: .3rem; overflow-x: auto; padding-bottom: .4rem; }
+.node {
+  flex: 0 0 auto; min-width: 132px; display: flex; flex-direction: column; gap: .1rem;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: clamp(.55rem, 1.1vw, .85rem) clamp(.6rem, 1.2vw, 1rem);
+}
+.node .fn { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: clamp(.82rem, 1.2vw, 1.02rem); }
+.node .fd { font-size: .76em; color: var(--ink-faint); line-height: 1.35; }
+.node.start .fn { color: var(--ink); }
+.node.done { background: var(--accent-dim); border-color: transparent; }
+.node.done .fn { color: var(--accent); }
+.node.done .fd { color: var(--ink-soft); }
+.step {
+  flex: 0 0 auto; min-width: 104px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .05rem; padding: 0 .25rem;
+}
+.step .tool { font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-align: center; }
+.step .glyph { color: var(--ink-faint); font-size: 1.15em; line-height: 1; }
+.step .flag { font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); }
+
+/* ── повестка: пять смысловых групп, порядок несёт смысл ── */
+.plan { display: flex; flex-direction: column; gap: clamp(.5rem, 1.4vh, 1.05rem); }
+.phase {
+  display: grid; grid-template-columns: minmax(148px, 215px) 1fr;
+  gap: clamp(.5rem, 1.6vw, 1.4rem); align-items: start;
+  padding-left: clamp(.7rem, 1.4vw, 1.15rem);
+  border-left: 2px solid var(--rail);
+}
+.phase.focus { border-left-color: var(--accent); }
+.phase-head { display: flex; align-items: baseline; }
+.phase-name {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(.95rem, 1.5vw, 1.28rem); letter-spacing: -.015em; line-height: 1.15;
+}
+.phase.focus .phase-name { color: var(--accent); }
+.phase-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.phase-items li { display: flex; align-items: baseline; gap: .9rem; padding: .24em 0; }
+.phase-items li + li { border-top: 1px solid var(--rail); }
+.phase-items .pt { flex: 1; }
+.phase-items .pd {
+  font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+@media (max-width: 660px) { .phase { grid-template-columns: 1fr; gap: .2rem; } }
+
+/* ── титул ── */
+.hero-num {
+  font-family: "JetBrains Mono", monospace; color: var(--accent); font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase; font-size: .82em;
+}
+h1 { font-size: clamp(2.4rem, 7vw, 5.4rem); }
+.hero-line { height: 2px; background: var(--accent); width: 84px; }
+
+/* ── подвал ── */
+.bar {
+  position: fixed; inset: auto 0 0 0; z-index: 30;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .5rem clamp(.7rem, 3vw, 1.6rem);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--rail);
+  font-family: "JetBrains Mono", monospace; font-size: .78rem;
+}
+.bar .spacer { flex: 1; }
+button {
+  font-family: "JetBrains Mono", monospace; font-size: .78rem; cursor: pointer;
+  background: transparent; color: var(--ink-soft); border: 1px solid var(--rail);
+  border-radius: 7px; padding: .3em .7em;
+}
+button:hover { color: var(--accent); border-color: var(--accent); }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.counter { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.counter b { color: var(--ink); }
+
+/* ── заметки докладчика ── */
+#notes {
+  position: fixed; inset: auto 0 0 0; z-index: 35;
+  background: var(--term-bg); color: var(--term-fg);
+  border-top: 2px solid var(--accent);
+  padding: 1rem clamp(.8rem, 3vw, 1.8rem) 3.1rem;
+  max-height: 52svh; overflow-y: auto;
+  font-size: clamp(.8rem, 1.1vw, .95rem); line-height: 1.55;
+}
+#notes h4 {
+  margin: 0 0 .5rem; font-family: "JetBrains Mono", monospace; font-size: .72rem;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+#notes ul { margin: 0; padding-left: 1.15em; }
+#notes li + li { margin-top: .35em; }
+#notes code { color: #F175D2; }
+#notes-time { color: var(--term-dim); letter-spacing: .08em; }
+
+kbd {
+  border: 1px solid var(--rail); border-bottom-width: 2px; border-radius: 5px;
+  padding: .05em .4em; font-size: .85em; color: var(--ink-soft);
+}
+.hint { color: var(--ink-faint); font-size: .9em; }
+strong { color: var(--ink); font-weight: 600; }
+.big { font-size: clamp(1.1rem, 1.9vw, 1.45rem); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* ══ seminar 2: вопросы, раскрытие ответов, задачи, таймер ══ */
+
+/* ответ скрыт, но место под него занято — слайд не прыгает при раскрытии */
+.reveal { position: relative; border-radius: 12px; min-height: 3.2rem; }
+.reveal:not(.shown) { cursor: pointer; }
+.reveal:not(.shown) > * { visibility: hidden; }
+.reveal:not(.shown)::after {
+  content: attr(data-label);
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--rail); border-radius: 12px; background: var(--paper);
+  font-family: "JetBrains Mono", monospace; font-size: .82em; letter-spacing: .04em; color: var(--ink-faint);
+}
+.reveal:not(.shown):hover::after,
+.reveal:not(.shown):focus-visible::after { border-color: var(--accent); color: var(--accent); }
+.reveal:focus-visible { outline: none; }
+.reveal.shown { animation: rv .2s ease-out; }
+@keyframes rv { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* варианты ответа: зал показывает номер на пальцах */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .55rem; }
+.opt {
+  display: flex; gap: .7rem; align-items: baseline;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: .5rem .85rem; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem);
+  /* длинные варианты переносятся, а не уезжают за край экрана; pre-wrap бережёт пробелы в выводе программ */
+  white-space: pre-wrap; overflow-wrap: anywhere; transition: background .2s, border-color .2s, opacity .2s;
+}
+.opt .n { font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+.opt > span:last-child { min-width: 0; }
+.slide.answered .opt { opacity: .45; }
+.slide.answered .opt.correct { opacity: 1; background: var(--accent-dim); border-color: var(--accent); }
+
+.ask {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(1.05rem, 1.9vw, 1.45rem); letter-spacing: -.01em;
+}
+.label {
+  font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint);
+}
+.stack { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+
+/* ответ: вывод программы + объяснение */
+.answer { display: flex; flex-direction: column; gap: .6rem; }
+.answer .why { background: var(--accent-dim); border-radius: 10px; padding: .75rem 1rem; color: var(--ink); font-size: .96em; }
+.answer .why p + p { margin-top: .45rem; }
+
+/* задачи */
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .7rem; }
+.lvl {
+  display: inline-block; font-family: "JetBrains Mono", monospace; font-size: .66em; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor;
+  border-radius: 999px; padding: .08em .6em; vertical-align: .2em; margin-left: .45em;
+}
+.lvl.l1 { color: var(--ok); }
+.lvl.l2 { color: var(--note); }
+.lvl.l3 { color: var(--accent); }
+.tasklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .7rem; }
+.tasklist .panel h3 { font-size: 1em; }
+pre.code.small, .term.small { font-size: clamp(.72rem, 1vw, .9rem); line-height: 1.5; }
+pre.code .num { color: var(--note); }
+
+/* таймер в подвале */
+#timer { font-variant-numeric: tabular-nums; }
+#timer.running { color: var(--accent); border-color: var(--accent); }
+#timer.done { color: var(--err); border-color: var(--err); }
+.keys-hint { color: var(--ink-faint); font-size: .72rem; }
+@media (max-width: 760px) { .keys-hint { display: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal.shown { animation: none; } }
+
+/* подпись под фрагментом: откуда он */
+.src { font-family: "JetBrains Mono", monospace; font-size: .68em; color: var(--ink-faint); line-height: 1.4; }
+.src code { font-size: 1em; }
+
+/* входной буфер: какие символы кто прочитал */
+.buf { display: flex; flex-wrap: wrap; gap: 4px; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem); }
+.buf .ch { border: 1px solid var(--rail); border-radius: 6px; padding: .15em .5em; background: var(--paper-2); min-width: 1.7em; text-align: center; }
+.buf .ch.nl { color: var(--note); font-weight: 700; }
+.buf .ch.a, .buf-legend i.a { background: var(--accent-dim); border-color: var(--accent); }
+.buf .ch.g, .buf-legend i.g { background: color-mix(in srgb, var(--note) 20%, var(--paper)); border-color: var(--note); }
+.buf .ch.rest { opacity: .45; border-style: dashed; }
+.buf-legend { display: flex; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8em; color: var(--ink-soft); }
+.buf-legend i { display: inline-block; width: .95em; height: .95em; border: 1px solid var(--rail); border-radius: 3px; vertical-align: -.12em; margin-right: .35em; }
+.buf-legend i.rest { border-style: dashed; opacity: .6; }
+.buf .ch.w, .buf-legend i.w { background: color-mix(in srgb, var(--ok) 20%, var(--paper)); border-color: var(--ok); }
+
+/* полные программы: чем длиннее, тем мельче; и страховка от выхода за экран */
+pre.code.xsmall { font-size: clamp(.62rem, .85vw, .8rem); line-height: 1.42; }
+pre.code { max-height: 74svh; overflow: auto; }
+
+/* текст на всю ширину */
+.slide .sub { max-width: none; }
+body .doc { max-width: 1100px; }
+body .doc .lede { max-width: none; }
+
+/* шире на больших экранах, таблицы без лишней прокрутки */
+.wrap { max-width: min(1680px, 94vw); }
+.cols > * { min-width: 0; }
+.slide table td.cmd { white-space: normal; }
+
+.bar button.on { color: var(--accent); border-color: var(--accent); }
+
+/* режимы vim: Normal в центре, остальные вокруг */
+.modes { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; gap: .6rem .5rem; align-items: center; }
+.mode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .65rem .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.mode b { font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-size: 1.12em; }
+.mode small { color: var(--ink-soft); font-size: .86em; line-height: 1.35; }
+.mode.main { grid-column: 3; grid-row: 1 / span 2; align-self: stretch; justify-content: center; text-align: center; background: var(--accent-dim); border-color: transparent; }
+.mode.main b { color: var(--accent); font-size: 1.6em; }
+.edge { display: flex; flex-direction: column; align-items: center; gap: .15rem; font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint); white-space: nowrap; }
+.edge .to { color: var(--accent); font-weight: 700; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } .mode.main { grid-column: auto; grid-row: auto; } .edge { flex-direction: row; gap: .8rem; } }
+.keys td.cmd { white-space: nowrap; }
+.vis { color: var(--err); }
+
+.flow { display: flex; align-items: stretch; gap: .45rem; flex-wrap: wrap; }
+.fnode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .6rem .75rem; display: flex; flex-direction: column; gap: .1rem; flex: 1 1 0; min-width: 0; }
+.fnode b { font-family: "JetBrains Mono", monospace; font-size: 1em; }
+.fnode small { color: var(--ink-soft); font-size: .84em; line-height: 1.3; }
+.fnode.out { background: var(--accent-dim); border-color: transparent; }
+.fnode.out b { color: var(--accent); }
+.arr { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); white-space: nowrap; }
+.arr b { color: var(--accent); font-weight: 700; }
+@media (max-width: 900px) { .flow { flex-direction: column; } .arr { flex-direction: row; gap: .5rem; } }
+ol.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: .4rem; }
+ol.steps code { white-space: nowrap; }
+.mini { font-size: .92em; }
+.slide table td.cmd code { white-space: nowrap; }
+.bad h3 { color: var(--err); }
+.good h3 { color: var(--ok); }
+pre.code .del { color: var(--err); }
+.term .y { color: #E8C468; }
+</style>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section class="slide is-active" data-sec="Семинар 5" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="hero-num">C++ · 1 курс · семинар 05</div>
+<h1>Кодстайл, санитайзеры и отладка</h1>
+<div class="hero-line"></div>
+<p class="sub big">Стайлгайд, санитайзеры, gdb</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-sec="Стайлгайд" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Стайлгайд</span></div><h2>Стайлгайд ШАД</h2>
+<div class="cols two"><div class="stack"><div class="panel pin"><h3>ysda.gitlab.io/algorithms/styleguide.html</h3><p>Правила с пояснениями. Основан на Google C++ Style Guide. Сегодня — пять пунктов из него.</p></div><div class="table-scroll"><table class="keys"><tr><th>правило</th><th>плохо</th><th>хорошо</th></tr><tr><td class="cmd">понятные имена</td><td class="dsc"><code>int c;</code></td><td class="dsc"><code>int count;</code></td></tr><tr><td class="cmd">объявлять рядом с использованием</td><td class="dsc"><code>int i, j, sum = 0;</code> в начале</td><td class="dsc"><code>int sum = 0;</code> внутри цикла</td></tr><tr><td class="cmd">не вычитать из <code>size()</code></td><td class="dsc"><code>i &lt; v.size() - 1</code></td><td class="dsc"><code>i + 1 &lt; v.size()</code></td></tr><tr><td class="cmd">без дублирования</td><td class="dsc">два одинаковых цикла</td><td class="dsc">функция</td></tr><tr><td class="cmd">без магических констант</td><td class="dsc"><code>x % 1000000007</code></td><td class="dsc"><code>x % kModulo</code></td></tr></table></div></div><div class="stack"><div class="panel "><h3>Ещё из стайлгайда</h3><ul><li>отступ — 4 пробела</li><li>фигурные скобки у <code>if</code>, <code>for</code>, <code>while</code> всегда</li><li>строка — не длиннее 100 символов</li><li><code>using namespace std;</code> нельзя</li><li><code>std::vector</code> вместо <code>int[]</code>, <code>std::string</code> вместо <code>char*</code></li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-sec="Имена" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Имена</span></div><h2>Как называть переменные, функции и типы</h2>
+<div class="cols two"><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>что</th><th>какое слово</th><th>пример</th></tr><tr><td class="cmd">переменная</td><td class="dsc">существительное</td><td class="dsc"><code>count</code>, <code>max_length</code></td></tr><tr><td class="cmd">контейнер</td><td class="dsc">существительное во мн. числе</td><td class="dsc"><code>numbers</code>, <code>students</code></td></tr><tr><td class="cmd">bool</td><td class="dsc">утверждение, да или нет</td><td class="dsc"><code>is_sorted</code>, <code>has_minus</code>, <code>found</code></td></tr><tr><td class="cmd">функция</td><td class="dsc">глагол: одно действие</td><td class="dsc"><code>ReadNumbers</code>, <code>CountPairs</code></td></tr><tr><td class="cmd">функция → bool</td><td class="dsc">вопрос</td><td class="dsc"><code>IsPrime</code>, <code>HasDuplicates</code></td></tr><tr><td class="cmd">тип</td><td class="dsc">существительное</td><td class="dsc"><code>Student</code>, <code>BigInteger</code></td></tr></table></div><p class="hint">Регистр — как в Google-стайлгайде: <code>Типы</code> и <code>Функции</code> с большой буквы, <code>переменные_через_подчёркивание</code>, константы <code>kMaxLength</code>. Главное — одинаково во всём проекте.</p></div><div class="stack"><div class="panel pin"><h3>Так не называем</h3><ul><li><code>a</code>, <code>x2</code>, <code>data</code> — ничего не говорят</li><li><code>tmp</code>, <code>flag</code> — признак ошибки: у переменной нет одной цели</li><li><code>cnt</code>, <code>nmbr</code> — сокращения запрещены, кроме общепринятых вроде <code>Http</code></li><li><code>Solve()</code>, <code>Check()</code> — что именно?</li><li><code>ReadAndSort()</code> — «And» в имени: функцию пора разбить</li></ul></div><p class="hint">Однобуквенные имена можно только счётчику очень короткого цикла <code>for</code>.</p></div></div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что делает эта функция?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> f(<span class="k">std</span>::vector&lt;<span class="k">int</span>&gt; a, <span class="k">int</span> x) {
+    <span class="k">int</span> c = <span class="num">0</span>;
+    <span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">0</span>; i &lt; a.size(); ++i) {
+        <span class="k">if</span> (a[i] &gt; x) {
+            ++c;
+        }
+    }
+    <span class="k">return</span> c;
+}</pre><span class="ask">Придумайте имена для f, a, x и c</span></div><div class="stack"><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><pre class="code small"><span class="k">int</span> CountGreaterThan(<span class="k">const</span> <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt;&amp; numbers,
+                     <span class="k">int</span> threshold) {
+    <span class="k">int</span> count = <span class="num">0</span>;
+    <span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">0</span>; i &lt; numbers.size(); ++i) {
+        <span class="k">if</span> (numbers[i] &gt; threshold) {
+            ++count;
+        }
+    }
+    <span class="k">return</span> count;
+}</pre><div class="why"><p>Код тот же. Но теперь вызов <code>CountGreaterThan(grades, 3)</code> читается без заглядывания внутрь.</p><p>Заодно <code>a</code> стал <code>const&amp;</code>: функция не копирует вектор и обещает его не менять.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">std</span>::vector&lt;<span class="k">std</span>::vector&lt;<span class="k">int</span>&gt;&gt; table = {{<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>}, {<span class="num">4</span>, <span class="num">5</span>, <span class="num">6</span>}, {<span class="num">7</span>, <span class="num">8</span>, <span class="num">9</span>}};
+<span class="k">int</span> i, j, sum = <span class="num">0</span>;
+<span class="k">for</span> (i = <span class="num">0</span>; i &lt; <span class="num">3</span>; ++i) {
+    <span class="k">for</span> (j = <span class="num">0</span>; j &lt; <span class="num">3</span>; ++j) {
+        sum += table[i][j];
+    }
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"row "</span> &lt;&lt; i &lt;&lt; <span class="s">": "</span> &lt;&lt; sum &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>row 0: 6
+row 1: 15
+row 2: 24</span></div><div class="opt correct"><span class="n">2</span><span>row 0: 6
+row 1: 21
+row 2: 45</span></div><div class="opt"><span class="n">3</span><span>не скомпилируется</span></div><div class="opt"><span class="n">4</span><span>мусор: sum не обнулён</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ row_sums.cpp &amp;&amp; ./a.out</span>
+<span class="o">row 0: 6</span>
+<span class="o">row 1: 21</span>
+<span class="o">row 2: 45</span></div><div class="why"><p><code>sum</code> обнулили один раз — до всех циклов. Строки копят сумму друг друга: 6, 6 + 15, 6 + 15 + 24.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-sec="Область видимости" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Область видимости</span></div><h2>Где объявлять переменную</h2>
+<div class="cols two"><div class="stack"><span class="label">исправлено</span><pre class="code small"><span class="k">std</span>::vector&lt;<span class="k">std</span>::vector&lt;<span class="k">int</span>&gt;&gt; table = {{<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>}, {<span class="num">4</span>, <span class="num">5</span>, <span class="num">6</span>}, {<span class="num">7</span>, <span class="num">8</span>, <span class="num">9</span>}};
+<span class="k">for</span> (<span class="k">size_t</span> row = <span class="num">0</span>; row &lt; table.size(); ++row) {
+<span class="hl">    <span class="k">int</span> sum = <span class="num">0</span>;</span>
+    <span class="k">for</span> (<span class="k">size_t</span> column = <span class="num">0</span>; column &lt; table[row].size(); ++column) {
+        sum += table[row][column];
+    }
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"row "</span> &lt;&lt; row &lt;&lt; <span class="s">": "</span> &lt;&lt; sum &lt;&lt; <span class="s">'\n'</span>;
+}</pre><p class="hint"><code>sum</code> создаётся заново для каждой строки. Забыть обнулить нельзя.</p></div><div class="stack"><div class="panel pin"><h3>Почему не в начале функции</h3><ul><li>переменная живёт дольше, чем нужна: можно случайно взять старое значение</li><li>чем меньше переменных видно в каждой строке, тем проще читать</li><li><code>int sum;</code> без значения хранит мусор</li><li>счётчик цикла — в самом <code>for</code></li></ul></div><div class="panel "><h3>Правила</h3><ul><li>объявлять как можно ближе к первому использованию и сразу инициализировать</li><li>блок → функция → поле класса → глобальная переменная: чем уже, тем лучше</li><li>глобальные переменные не использовать</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> balance = -<span class="num">1</span>;
+<span class="k">unsigned</span> <span class="k">int</span> limit = <span class="num">1</span>;
+<span class="k">if</span> (balance &lt; limit) {
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"balance &lt; limit\n"</span>;
+} <span class="k">else</span> {
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"balance &gt;= limit\n"</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>balance < limit</span></div><div class="opt correct"><span class="n">2</span><span>balance >= limit</span></div><div class="opt"><span class="n">3</span><span>ошибка компиляции</span></div><div class="opt"><span class="n">4</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="o">balance &gt;= limit</span></div><div class="why"><p>При сравнении <code>int</code> с <code>unsigned int</code> оба приводятся к <code>unsigned int</code>. −1 становится 4294967295, а это больше 1.</p><p>Так же ведёт себя сравнение с <code>v.size()</code>: <code>i &lt; v.size()</code> при <code>int i = -1</code> — ложь.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-sec="Типы" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Типы</span></div><h2>Вычитание из size()</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> CountIncreasingPairs(<span class="k">const</span> <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt;&amp; numbers) {
+    <span class="k">int</span> count = <span class="num">0</span>;
+<span class="hl">    <span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">0</span>; i &lt; numbers.size() - <span class="num">1</span>; ++i) {</span>
+        <span class="k">if</span> (numbers[i] &lt; numbers[i + <span class="num">1</span>]) {
+            ++count;
+        }
+    }
+    <span class="k">return</span> count;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./pairs</span>
+<span class="o">2</span>
+<span class="e">zsh: segmentation fault  ./pairs</span></div></div><div class="stack"><div class="panel pin"><h3>Что случилось</h3><p>Первый вызов вернул 2. Второй, с пустым вектором: <code>0 - 1</code> = 18446744073709551615, цикл выходит за конец вектора, программа падает.</p></div><span class="label">как надо: + 1 в другую часть</span><pre class="code small"><span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">0</span>; i + <span class="num">1</span> &lt; numbers.size(); ++i) {</pre><span class="label">если вычитать всё-таки нужно — сначала в int</span><pre class="code small"><span class="k">int</span> last = <span class="k">static_cast</span>&lt;<span class="k">int</span>&gt;(numbers.size()) - <span class="num">1</span>;</pre></div></div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-sec="Типы" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Типы</span></div><h2>Неявные приведения типов</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">std</span>::vector&lt;<span class="k">int</span>&gt; numbers = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>};
+<span class="k">int</span> last_index = numbers.size() - <span class="num">1</span>;
+<span class="k">double</span> average = <span class="num">7</span> / <span class="num">2</span>;
+<span class="k">int</span> width = <span class="num">100000</span>;
+<span class="k">int</span> height = <span class="num">100000</span>;
+<span class="k">long</span> <span class="k">long</span> area = width * height;
+<span class="k">int</span> rounded = <span class="num">2.99</span>;
+<span class="k">std</span>::cout &lt;&lt; last_index &lt;&lt; <span class="s">' '</span> &lt;&lt; average &lt;&lt; <span class="s">'\n'</span>;
+<span class="k">std</span>::cout &lt;&lt; area &lt;&lt; <span class="s">' '</span> &lt;&lt; rounded &lt;&lt; <span class="s">'\n'</span>;</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall -Wextra -Wconversion conversions.cpp</span>
+<span class="w">warning: implicit conversion from 'double' to 'int'</span>
+<span class="w">  changes value from 2.99 to 2</span>
+<span class="w">warning: implicit conversion loses integer precision:</span>
+<span class="w">  'size_type' (aka 'unsigned long') to 'int'</span>
+<span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">2 3</span>
+<span class="o">1410065408 2</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>строка</th><th>что на самом деле</th></tr><tr><td class="cmd">7 / 2</td><td class="dsc">оба int → деление нацело, 3. Потом 3 → 3.0. <b>Предупреждения нет</b></td></tr><tr><td class="cmd">width * height</td><td class="dsc">умножение в int, переполнение — и уже потом в long long. <b>Предупреждения нет</b></td></tr><tr><td class="cmd">= 2.99</td><td class="dsc">дробная часть отброшена</td></tr><tr><td class="cmd">= size() - 1</td><td class="dsc">64 бита → 32: большие размеры обрежутся</td></tr></table></div><div class="panel pin"><h3>Что делать</h3><ul><li>пишите тип, который нужен: <code>7.0 / 2</code>, <code>int64_t</code> для больших чисел</li><li>приводите явно и до операции: <code>static_cast&lt;int64_t&gt;(width) * height</code></li><li>собирайте с <code>-Wall -Wextra</code>, а предупреждения читайте</li><li><code>-Wconversion</code> ловит больше, но не всё</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-sec="Дублирование" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Дублирование</span></div><h2>Дублирование кода</h2>
+<div class="cols two"><div class="stack"><span class="label">найдите ошибку</span><pre class="code small"><span class="cm">// math и physics — std::vector&lt;int&gt;</span>
+<span class="k">int</span> max_math = math[<span class="num">0</span>];
+<span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">1</span>; i &lt; math.size(); ++i) {
+    <span class="k">if</span> (math[i] &gt; max_math) {
+        max_math = math[i];
+    }
+}
+<span class="k">int</span> max_physics = physics[<span class="num">0</span>];
+<span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">1</span>; i &lt; physics.size(); ++i) {
+    <span class="k">if</span> (physics[i] &gt; max_math) {
+        max_physics = physics[i];
+    }
+}</pre><div class="reveal" data-label="где ошибка  →"><div class="why"><p>Во втором цикле сравнение с <code>max_math</code> вместо <code>max_physics</code>. Компилятор это не заметит.</p></div></div></div><div class="stack"><span class="label">вынесли в функцию</span><pre class="code small"><span class="k">int</span> FindMaximum(<span class="k">const</span> <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt;&amp; grades) {
+    <span class="k">int</span> maximum = grades[<span class="num">0</span>];
+    <span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">1</span>; i &lt; grades.size(); ++i) {
+        maximum = <span class="k">std</span>::max(maximum, grades[i]);
+    }
+    <span class="k">return</span> maximum;
+}</pre><pre class="code small"><span class="k">int</span> max_math = FindMaximum(math);
+<span class="k">int</span> max_physics = FindMaximum(physics);</pre><p class="hint">Ошибку в функции исправляем в одном месте.</p></div></div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-sec="Константы" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Константы</span></div><h2>Магические константы</h2>
+<div class="cols two"><div class="stack"><span class="label">что здесь 86400, 9 и 1000000007?</span><pre class="code small"><span class="k">if</span> (elapsed &gt; <span class="num">86400</span>) {
+    days += elapsed / <span class="num">86400</span>;
+}
+<span class="k">for</span> (<span class="k">int</span> i = <span class="num">0</span>; i &lt; <span class="num">9</span>; ++i) {
+    answer = (answer * <span class="num">10</span> + digits[i]) % <span class="num">1000000007</span>;
+}</pre><span class="label">с именами</span><pre class="code small"><span class="k">const</span> <span class="k">int</span> kSecondsPerDay = <span class="num">24</span> * <span class="num">60</span> * <span class="num">60</span>;
+<span class="k">const</span> <span class="k">int</span> kBlockDigits = <span class="num">9</span>;
+<span class="k">const</span> <span class="k">int</span> kModulo = <span class="num">1</span><span class="s">'000'</span><span class="num">000</span>'<span class="num">007</span>;
+
+<span class="k">if</span> (elapsed &gt; kSecondsPerDay) {
+    days += elapsed / kSecondsPerDay;
+}</pre></div><div class="stack"><div class="panel pin"><h3>Что не так</h3><ul><li>непонятно, что это за число</li><li>одно число в пяти местах: при правке легко пропустить одно</li><li>одинаковые числа с разным смыслом: 9 цифр в блоке и 9 в другом месте — поиском не заменить</li></ul></div><p class="hint">Константы — через <code>const</code> или <code>constexpr</code>, не через <code>#define</code>. А <code>1'000'000'007</code> — это C++14: апострофы просто для читаемости.</p></div></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-sec="Часть 2" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Часть 2</span></div><h2>Часть 2. Санитайзеры и отладка</h2>
+
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-sec="Что ломается" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Что ломается</span></div><h2>Ошибки работы с памятью</h2>
+<div class="cols two"><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>ошибка</th><th>как выглядит</th></tr><tr><td class="cmd">выход за границу</td><td class="dsc"><code>v[v.size()]</code>, <code>i &lt;= n</code> вместо <code>i &lt; n</code></td></tr><tr><td class="cmd">переполнение стека</td><td class="dsc">рекурсия без условия выхода</td></tr><tr><td class="cmd">обращение после удаления</td><td class="dsc"><code>delete p;</code> … <code>*p</code></td></tr><tr><td class="cmd">двойное удаление</td><td class="dsc"><code>delete p;</code> … <code>delete p;</code></td></tr><tr><td class="cmd">висячая ссылка</td><td class="dsc">ссылка на элемент вектора, а вектор вырос</td></tr></table></div></div><div class="stack"><div class="panel pin"><h3>Что бывает при запуске</h3><ul><li>программа не падает и печатает мусор, иногда похожий на правильный ответ</li><li>падает позже, не в строке с ошибкой</li><li>локально работает, в проверяющей системе — RE или WA</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt; numbers = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>, <span class="num">5</span>};
+    <span class="k">int</span> sum = <span class="num">0</span>;
+<span class="hl">    <span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">0</span>; i &lt;= numbers.size(); ++i) {</span>
+        sum += numbers[i];
+    }
+    <span class="k">std</span>::cout &lt;&lt; sum &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ out_of_bounds.cpp &amp;&amp; ./a.out</span></div></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>15</span></div><div class="opt"><span class="n">2</span><span>segmentation fault</span></div><div class="opt"><span class="n">3</span><span>ошибка компиляции</span></div><div class="opt"><span class="n">4</span><span>исключение out_of_range</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="o">15</span>
+<span class="p">$</span> <span class="c">echo $?</span>
+<span class="o">0</span></div><div class="why"><p>Программа прочитала <code>numbers[5]</code> — память сразу за вектором. Там оказался 0, ответ совпал с правильным. Код возврата 0.</p><p>На другой машине или с другими флагами там будет другое число.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-sec="Санитайзеры" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Санитайзеры</span></div><h2>Санитайзеры: флаги</h2>
+<div class="cols two"><div class="stack"><div class="flow"><div class="fnode"><b>ваш код</b><small>main.cpp</small></div><div class="arr"><b>-fsanitize=…</b><span>компилятор</span></div><div class="fnode"><b>код + проверки</b><small>перед каждым обращением к памяти</small></div><div class="arr"><b>запуск</b><span>ошибка?</span></div><div class="fnode out"><b>отчёт</b><small>что, где, кто выделил</small></div></div><div class="term small"><span class="p">$</span> <span class="c">g++ -g -fsanitize=address main.cpp</span>
+<span class="p">$</span> <span class="c">g++ -g -fsanitize=undefined main.cpp</span>
+<span class="p">$</span> <span class="c">g++ -g -fsanitize=address,undefined main.cpp</span>
+<span class="cm"># -g — чтобы в отчёте были номера строк</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>флаг</th><th>что ловит</th></tr><tr><td class="cmd">address</td><td class="dsc">выход за границу, use-after-free, double free, переполнение стека. На Linux ещё и утечки</td></tr><tr><td class="cmd">leak</td><td class="dsc">только утечки памяти</td></tr><tr><td class="cmd">undefined</td><td class="dsc">переполнение int, деление на ноль, сдвиги и другое UB в арифметике</td></tr></table></div><div class="panel pin"><h3>Ограничения</h3><ul><li>программа медленнее примерно в 2 раза, памяти нужно больше</li><li>ловится только то, что случилось при этом запуске</li><li>в посылку флаги не добавляем</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-sec="ASan" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">ASan</span></div><h2>Как читать отчёт AddressSanitizer</h2>
+<div class="cols two"><div class="stack"><div class="term small"><span class="p">$</span> <span class="c">g++ -g -fsanitize=address out_of_bounds.cpp</span>
+<span class="p">$</span> <span class="c">./a.out</span>
+<span class="e">ERROR: AddressSanitizer: heap-buffer-overflow on address 0x603000001be4</span>
+<span class="w">READ of size 4 at 0x603000001be4 thread T0</span>
+<span class="y">    #0 in main out_of_bounds.cpp:8</span>
+<span class="o"></span>
+<span class="n">0x603000001be4 is located 0 bytes after 20-byte region</span>
+<span class="o">allocated by thread T0 here:</span>
+<span class="o">    #0 in operator new(unsigned long)</span>
+<span class="o">    …  кадры std::vector …</span>
+<span class="y">    #8 in main out_of_bounds.cpp:5</span>
+<span class="o"></span>
+<span class="e">SUMMARY: AddressSanitizer: heap-buffer-overflow out_of_bounds.cpp:8 in main</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>строка</th><th>что значит</th></tr><tr><td class="cmd">heap-buffer-overflow</td><td class="dsc"><b>что</b>: вышли за границу памяти в куче</td></tr><tr><td class="cmd">READ of size 4</td><td class="dsc">читали 4 байта — один <code>int</code></td></tr><tr><td class="cmd">#0 … out_of_bounds.cpp:8</td><td class="dsc"><b>где</b>: строка 8, <code>sum += numbers[i]</code></td></tr><tr><td class="cmd">0 bytes after 20-byte region</td><td class="dsc">сразу за концом блока из 20 байт = 5 int</td></tr><tr><td class="cmd">allocated … :5</td><td class="dsc">этот блок создан в строке 5 — наш вектор</td></tr></table></div><div class="panel pin"><h3>Как искать</h3><ul><li>первая строка — тип ошибки</li><li>в стеке ищите <b>первую строку с вашим файлом</b>, кадры std пропускайте</li><li>дальше — откуда эта память взялась</li></ul></div><span class="label">сборка без отладочной информации</span><div class="term small"><span class="p">$</span> <span class="c">g++ -fsanitize=address main.cpp -o main</span>
+<span class="o">…</span>
+<span class="y">    #0 0x561040c315be in main (/home/ismdnvat/tami/main+0x15be)</span>
+<span class="o">…</span></div><p class="hint">Вместо <code>main.cpp:8</code> — смещение в бинаре. Ошибка найдена, но строки нет: пересоберите с <code>-g</code>.</p></div></div>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-sec="Блиц" data-time="10 мин" data-timer="600" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Блиц</span></div><h2>Блиц: какая ошибка?</h2>
+<div class="cols two"><div class="stack"><div class="panel pin"><h3>seminar5.zip</h3><p>Папка <code>linux/</code> или <code>mac/</code> — по своей системе. Для каждого файла: собрать, запустить, назвать ошибку и строку.</p></div><div class="term small"><span class="p">$</span> <span class="c">g++ -g -fsanitize=address,undefined task01.cpp -o task01</span>
+<span class="p">$</span> <span class="c">./task01</span></div><span class="label">mac, только task04</span><div class="term small"><span class="p">$</span> <span class="c">g++ -g task04.cpp -o task04</span>
+<span class="p">$</span> <span class="c">leaks --atExit -- ./task04</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>файл</th><th>ответ</th></tr><tr><td class="cmd">task01</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>ASan</b>: heap-use-after-free, строка 8. Память освободил <code>push_back</code> в строке 7</div></td></tr><tr><td class="cmd">task02</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>UBSan</b>: signed integer overflow, строка 6; division by zero, строка 10</div></td></tr><tr><td class="cmd">task03</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>ASan</b>: double-free, строка 4</div></td></tr><tr><td class="cmd">task04</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>LeakSanitizer</b>: утечка 400 байт, выделены в строке 4</div></td></tr><tr><td class="cmd">task05</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>ASan</b>: stack-overflow, <code>Factorial</code>, строка 3</div></td></tr><tr><td class="cmd">task06</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>ASan</b>: heap-use-after-free, строка 6</div></td></tr><tr><td class="cmd">task07</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>ASan</b>: stack-buffer-overflow, строка 6; <b>UBSan</b>: index 5 out of bounds</div></td></tr></table></div></div></div>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide" data-sec="Разбор блица" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Разбор блица</span></div><h2>task06 и task03</h2>
+<div class="cols two"><div class="stack"><span class="label">task06.cpp</span><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">int</span>* value = <span class="k">new</span> <span class="k">int</span>(<span class="num">42</span>);
+    <span class="k">delete</span> value;
+    <span class="k">std</span>::cout &lt;&lt; *value &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -g task06.cpp &amp;&amp; ./a.out</span>
+<span class="o">1465355518</span>
+<span class="cm"># без санитайзера: мусор</span></div><div class="term small"><span class="e">ERROR: AddressSanitizer: heap-use-after-free on address 0x502000000010</span>
+<span class="w">READ of size 4 at 0x502000000010 thread T0</span>
+<span class="y">    #0 in main task06.cpp:6</span>
+<span class="o">freed by thread T0 here:</span>
+<span class="y">    #1 in main task06.cpp:5</span>
+<span class="o">previously allocated by thread T0 here:</span>
+<span class="y">    #1 in main task06.cpp:4</span></div></div><div class="stack"><span class="label">task03.cpp</span><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">int</span>* numbers = <span class="k">new</span> <span class="k">int</span>[<span class="num">10</span>];
+    <span class="k">delete</span>[] numbers;
+    <span class="k">delete</span>[] numbers;
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -g task03.cpp &amp;&amp; ./a.out</span>
+<span class="e">free(): double free detected in tcache 2</span>
+<span class="e">Aborted (core dumped)</span></div><div class="term small"><span class="e">ERROR: AddressSanitizer: attempting double-free on 0x504000000010</span>
+<span class="y">    #1 in main task03.cpp:4</span>
+<span class="o">freed by thread T0 here:</span>
+<span class="y">    #1 in main task03.cpp:3</span>
+<span class="o">previously allocated by thread T0 here:</span>
+<span class="y">    #1 in main task03.cpp:2</span></div><div class="panel pin"><h3>Что есть в отчёте</h3><ul><li>где обратились к памяти</li><li>где её освободили</li><li>где выделили</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 19 -->
+<section class="slide" data-sec="Разбор блица" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Разбор блица</span></div><h2>task01 и task05</h2>
+<div class="cols two"><div class="stack"><span class="label">task01.cpp</span><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt; numbers = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>};
+    <span class="k">const</span> <span class="k">int</span>&amp; first = numbers[<span class="num">0</span>];
+<span class="hl">    numbers.push_back(<span class="num">4</span>);</span>
+    <span class="k">std</span>::cout &lt;&lt; first &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -g task01.cpp &amp;&amp; ./a.out</span>
+<span class="o">1560673167</span>
+<span class="cm"># без санитайзера: мусор</span></div><div class="term small"><span class="e">ERROR: AddressSanitizer: heap-use-after-free on address 0x502000000010</span>
+<span class="w">READ of size 4 at 0x502000000010 thread T0</span>
+<span class="y">    #0 in main task01.cpp:8</span>
+<span class="o">freed by thread T0 here:</span>
+<span class="o">    …  vector::push_back …</span>
+<span class="y">    #7 in main task01.cpp:7</span></div></div><div class="stack"><span class="label">task05.cpp</span><pre class="code small"><span class="k">int</span> Factorial(<span class="k">int</span> n) {
+    <span class="k">return</span> n * Factorial(n - <span class="num">1</span>);
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -g task05.cpp &amp;&amp; ./a.out</span>
+<span class="e">Segmentation fault (core dumped)</span></div><div class="term small"><span class="e">ERROR: AddressSanitizer: stack-overflow on address 0x7fffb1a0fffc</span>
+<span class="y">    #0 in Factorial(int) task05.cpp:3</span>
+<span class="y">    #1 in Factorial(int) task05.cpp:4</span>
+<span class="y">    #2 in Factorial(int) task05.cpp:4</span>
+<span class="o">    …</span></div><p class="hint">Без санитайзера — только segfault. С ним — функция и строка.</p></div></div>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="slide" data-sec="Разбор блица" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Разбор блица</span></div><h2>task04: утечка памяти</h2>
+<div class="cols two"><div class="stack"><span class="label">task04.cpp</span><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">int</span>* numbers = <span class="k">new</span> <span class="k">int</span>[<span class="num">100</span>];
+    numbers[<span class="num">0</span>] = <span class="num">1</span>;
+    <span class="k">std</span>::cout &lt;&lt; numbers[<span class="num">0</span>] &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="panel pin"><h3>Утечка</h3><p>Память выделили через <code>new</code> и не освободили. В цикле так можно занять всю память. Программа работает и печатает 1.</p></div></div><div class="stack"><span class="label">linux</span><div class="term small"><span class="p">$</span> <span class="c">g++ -g -fsanitize=address,undefined task04.cpp &amp;&amp; ./a.out</span>
+<span class="o">1</span>
+<span class="e">ERROR: LeakSanitizer: detected memory leaks</span>
+<span class="w">Direct leak of 400 byte(s) in 1 object(s) allocated from:</span>
+<span class="o">    #0 in operator new[](unsigned long)</span>
+<span class="y">    #1 in main task04.cpp:4</span>
+<span class="e">SUMMARY: AddressSanitizer: 400 byte(s) leaked in 1 allocation(s).</span></div><span class="label">mac</span><div class="term small"><span class="p">$</span> <span class="c">g++ -g task04.cpp &amp;&amp; leaks --atExit -- ./a.out</span>
+<span class="o">Process 68560: 1 leak for 400 total leaked bytes.</span>
+<span class="y">3   task04   main + 32  task04.cpp:4</span></div><p class="hint">На Linux утечки ищет <code>-fsanitize=address</code> при завершении программы. На Mac — утилита <code>leaks</code>.</p></div></div>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide" data-sec="Разбор блица" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Разбор блица</span></div><h2>task02: UndefinedBehaviorSanitizer</h2>
+<div class="cols two"><div class="stack"><span class="label">task02.cpp</span><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">int</span> big = INT_MAX;
+    <span class="k">int</span> next = big + <span class="num">1</span>;
+    <span class="k">std</span>::cout &lt;&lt; next &lt;&lt; <span class="s">'\n'</span>;
+
+    <span class="k">int</span> zero = <span class="num">0</span>;
+    <span class="k">std</span>::cout &lt;&lt; <span class="num">10</span> / zero &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><span class="label">без санитайзера</span><div class="term small"><span class="p">$</span> <span class="c">g++ -g task02.cpp &amp;&amp; ./a.out</span>
+<span class="o">-2147483648</span>
+<span class="e">Floating point exception (core dumped)</span>
+<span class="cm"># mac: -2147483648, 0 — не падает</span></div></div><div class="stack"><span class="label">linux</span><div class="term small"><span class="w">task02.cpp:6:9: runtime error: signed integer overflow:</span>
+<span class="w">  2147483647 + 1 cannot be represented in type 'int'</span>
+<span class="w">task02.cpp:10:21: runtime error: division by zero</span>
+<span class="e">ERROR: AddressSanitizer: FPE on unknown address 0x5565411174d2</span>
+<span class="y">    #0 in main task02.cpp:10</span></div><span class="label">mac</span><div class="term small"><span class="w">task02.cpp:6:20: runtime error: signed integer overflow:</span>
+<span class="w">  2147483647 + 1 cannot be represented in type 'int'</span>
+<span class="o">-2147483648</span>
+<span class="w">task02.cpp:10:21: runtime error: division by zero</span>
+<span class="o">0</span></div><div class="panel pin"><h3>UBSan</h3><ul><li>сообщает и продолжает работу: за запуск может быть несколько ошибок</li><li>деление на 0 на x86 роняет программу, на ARM-Маке даёт 0</li><li>падать на первой ошибке: <code>-fno-sanitize-recover=all</code></li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="slide" data-sec="Разбор блица" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Разбор блица</span></div><h2>task07: выход за массив на стеке</h2>
+<div class="cols two"><div class="stack"><span class="label">task07.cpp</span><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">int</span> squares[<span class="num">5</span>];
+<span class="hl">    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">1</span>; i &lt;= <span class="num">5</span>; ++i) {</span>
+        squares[i] = i * i;
+    }
+    <span class="k">std</span>::cout &lt;&lt; squares[<span class="num">1</span>] &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -g task07.cpp &amp;&amp; ./a.out</span>
+<span class="o">1</span>
+<span class="cm"># без санитайзера: работает</span></div></div><div class="stack"><div class="term small"><span class="w">task07.cpp:6:18: runtime error: index 5 out of bounds for type 'int [5]'</span>
+<span class="e">ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7f0467100034</span>
+<span class="w">WRITE of size 4 at 0x7f0467100034 thread T0</span>
+<span class="y">    #0 in main task07.cpp:6</span>
+<span class="o">  This frame has 1 object(s):</span>
+<span class="n">    [32, 52) 'squares' (line 4) &lt;== Memory access at offset 52 overflows this variable</span></div><div class="panel pin"><h3>Что видно</h3><ul><li><code>WRITE</code> — не читали, а писали за границу</li><li>ASan называет переменную: <code>squares</code>, строка 4</li><li>индексы массива из 5 элементов — 0…4, а цикл идёт до 5</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 23 -->
+<section class="slide" data-sec="Задача" data-time="12 мин" data-timer="600" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача</span></div><h2>Задача 1: найдите баги санитайзерами</h2>
+<div class="cols two"><div class="stack"><div class="panel pin"><h3>Что сделать</h3><ol class="steps"><li>соберите <code>reverse.cpp</code>, <code>area.cpp</code>, <code>queue.cpp</code> обычным g++ и запустите — похоже на правду?</li><li>соберите с <code>-g -fsanitize=address,undefined</code></li><li>по отчёту найдите строку и объясните, в чём ошибка</li><li>исправьте и проверьте, что санитайзер молчит</li></ol></div><div class="term small"><span class="p">$</span> <span class="c">g++ -g -fsanitize=address,undefined reverse.cpp -o reverse</span>
+<span class="p">$</span> <span class="c">echo 5 1 2 3 4 5 | ./reverse</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>файл</th><th>ввод</th><th>без санитайзера</th></tr><tr><td class="cmd">reverse.cpp</td><td class="dsc"><code>5 1 2 3 4 5</code></td><td class="dsc"><code>0 5 4 3 2</code></td></tr><tr><td class="cmd">area.cpp</td><td class="dsc"><code>100000 100000</code></td><td class="dsc"><code>1410065408 m^2 = 141006 ha</code></td></tr><tr><td class="cmd">queue.cpp</td><td class="dsc">—</td><td class="dsc"><code>first: </code> (пусто)</td></tr></table></div><p class="hint">В отчёте ASan ищите первую строку с именем вашего файла — сверху будут кадры стандартной библиотеки.</p><div class="reveal" data-label="ответы  →"><div class="table-scroll"><table class="keys"><tr><th>файл</th><th>ошибка</th></tr><tr><td class="cmd">reverse.cpp</td><td class="dsc"><code>numbers[i]</code> при <code>i = size()</code>: нужно <code>numbers[i - 1]</code>. ASan: heap-buffer-overflow, <code>reverse.cpp:9</code></td></tr><tr><td class="cmd">area.cpp</td><td class="dsc"><code>width * height</code> переполняет int. UBSan: <code>area.cpp:11</code>. Исправление — <code>int64_t</code></td></tr><tr><td class="cmd">queue.cpp</td><td class="dsc"><code>first</code> — ссылка на элемент, вектор переехал при <code>push_back</code>. ASan: heap-use-after-free, <code>queue.cpp:12</code></td></tr></table></div></div></div></div>
+  </div>
+</section>
+
+<!-- 24 -->
+<section class="slide" data-sec="Отладочный вывод" data-time="6 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Отладочный вывод</span></div><h2>'\n', std::endl и std::cerr</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="k">int</span> main() {
+    <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt; numbers = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>};
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"start\n"</span>;
+    <span class="k">for</span> (<span class="k">size_t</span> i = <span class="num">0</span>; i &lt; <span class="num">3</span>; ++i) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="s">"i = "</span> &lt;&lt; i &lt;&lt; <span class="s">'\n'</span>;
+    }
+    <span class="k">int</span>* broken = <span class="k">nullptr</span>;
+    <span class="k">std</span>::cout &lt;&lt; <span class="s">"before crash\n"</span>;
+    *broken = numbers[<span class="num">0</span>];
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./lost_output</span>
+<span class="o">start</span>
+<span class="o">i = 0</span>
+<span class="o">i = 1</span>
+<span class="o">i = 2</span>
+<span class="o">before crash</span>
+<span class="e">zsh: segmentation fault  ./lost_output</span>
+<span class="p">$</span> <span class="c">./lost_output &gt; out.txt; cat out.txt</span>
+<span class="e">zsh: segmentation fault  ./lost_output &gt; out.txt</span>
+<span class="cm"># out.txt пустой!</span></div></div><div class="stack"><div class="panel pin"><h3>Буфер</h3><p><code>std::cout</code> копит текст в буфере. В терминал буфер сбрасывается после каждого <code>'\n'</code>, в файл — когда заполнится или программа завершится нормально.</p><p>При падении содержимое буфера теряется.</p></div><div class="table-scroll"><table class="keys"><tr><th>что</th><th>когда текст уходит</th></tr><tr><td class="cmd">'\n'</td><td class="dsc">в терминале — сразу; в файл — потом</td></tr><tr><td class="cmd">std::endl</td><td class="dsc">сразу: перевод строки + сброс буфера</td></tr><tr><td class="cmd">std::cerr</td><td class="dsc">сразу: у cerr нет буфера</td></tr></table></div><p class="hint">Отладочный вывод — в <code>std::cerr</code>: не теряется и не попадает в ответ. В обычном выводе <code>endl</code> не нужен: сброс на каждой строке медленный.</p></div></div>
+  </div>
+</section>
+
+<!-- 25 -->
+<section class="slide" data-sec="gdb" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">gdb</span></div><h2>gdb: сборка и запуск</h2>
+<div class="cols two"><div class="stack"><span class="label">собрать для отладчика</span><div class="term small"><span class="p">$</span> <span class="c">g++ -g -O0 find_root.cpp -o find_root</span></div><div class="table-scroll"><table class="keys"><tr><th>флаг</th><th>зачем</th></tr><tr><td class="cmd">-g</td><td class="dsc">отладочная информация: какая строка кода какой инструкции соответствует, как зовут переменные</td></tr><tr><td class="cmd">-O0</td><td class="dsc">без оптимизаций: каждая строка и переменная на месте. С <code>-O2</code> отладчик скачет по строкам и пишет <code>&lt;optimized out&gt;</code></td></tr></table></div><span class="label">запустить</span><div class="term small"><span class="p">$</span> <span class="c">gdb ./find_root</span>
+<span class="p">(gdb)</span> <span class="c">run</span>
+<span class="cm"># с аргументами командной строки:</span>
+<span class="p">$</span> <span class="c">gdb --args ./sum_args 1 2 3</span>
+<span class="cm"># со входом из файла:</span>
+<span class="p">(gdb)</span> <span class="c">run &lt; input.txt</span></div></div><div class="stack"><div class="panel pin"><h3>Что умеет отладчик</h3><ul><li>остановить программу на нужной строке</li><li>выполнять по одной строке</li><li>показать значения переменных</li><li>показать, кто кого вызвал, — стек</li><li>остановиться, когда переменная изменилась</li></ul></div><p class="hint">В VS Code и CLion — тот же gdb с кнопками. Команды нужны, чтобы понимать кнопки и отлаживать без IDE.</p></div></div>
+  </div>
+</section>
+
+<!-- 26 -->
+<section class="slide" data-sec="gdb" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">gdb</span></div><h2>bt: где упала программа</h2>
+<div class="cols two"><div class="stack"><span class="label">pairs.cpp со слайда «Вычитание из size()»</span><div class="term small"><span class="p">$</span> <span class="c">g++ -g -O0 pairs.cpp -o pairs</span>
+<span class="p">$</span> <span class="c">gdb ./pairs</span>
+<span class="p">(gdb)</span> <span class="c">run</span>
+<span class="o">Starting program: /home/anna/pairs</span>
+<span class="o">2</span>
+<span class="o"></span>
+<span class="e">Program received signal SIGSEGV, Segmentation fault.</span>
+<span class="o">0x0000555555555283 in CountIncreasingPairs (</span>
+<span class="o">    numbers=std::vector of length 0, capacity 0) at pairs.cpp:8</span>
+<span class="y">8	        if (numbers[i] &lt; numbers[i + 1]) {</span>
+<span class="p">(gdb)</span> <span class="c">bt</span>
+<span class="y">#0  CountIncreasingPairs (numbers=std::vector of length 0, capacity 0)</span>
+<span class="y">    at pairs.cpp:8</span>
+<span class="y">#1  0x00005555555553b9 in main () at pairs.cpp:17</span>
+<span class="p">(gdb)</span> <span class="c">print i</span>
+<span class="o">$1 = 0</span>
+<span class="p">(gdb)</span> <span class="c">print numbers.size() - 1</span>
+<span class="o">$2 = 18446744073709551615</span></div></div><div class="stack"><div class="panel pin"><h3>bt — backtrace</h3><p>Стек вызовов: #0 — где остановились, #1, #2… — кто вызвал. Первая строка с вашим файлом — место падения.</p></div><div class="table-scroll"><table class="keys"><tr><th>команда</th><th>что делает</th></tr><tr><td class="cmd">run, r</td><td class="dsc">запустить</td></tr><tr><td class="cmd">bt</td><td class="dsc">стек вызовов</td></tr><tr><td class="cmd">frame 1, f 1</td><td class="dsc">перейти в кадр #1 — смотреть переменные вызывающей функции</td></tr><tr><td class="cmd">print expr, p expr</td><td class="dsc">значение переменной или выражения</td></tr></table></div><p class="hint"><code>18446744073709551615</code> — это <code>size() - 1</code> для пустого вектора.</p></div></div>
+  </div>
+</section>
+
+<!-- 27 -->
+<section class="slide" data-sec="gdb" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">gdb</span></div><h2>Брейкпоинты и шаги</h2>
+<div class="cols two"><div class="stack"><span class="label">find_root.cpp, ввод 17</span><div class="term small"><span class="p">$</span> <span class="c">g++ -g -O0 find_root.cpp -o find_root</span>
+<span class="p">$</span> <span class="c">echo 17 &gt; input.txt</span>
+<span class="p">$</span> <span class="c">gdb ./find_root</span>
+<span class="p">(gdb)</span> <span class="c">break IntegerSqrt</span>
+<span class="o">Breakpoint 1 at 0x1171: file find_root.cpp, line 6.</span>
+<span class="p">(gdb)</span> <span class="c">run &lt; input.txt</span>
+<span class="o">Breakpoint 1, IntegerSqrt (n=17) at find_root.cpp:6</span>
+<span class="y">6	    long long left = 0;</span>
+<span class="p">(gdb)</span> <span class="c">next</span>
+<span class="y">7	    long long right = n;</span>
+<span class="p">(gdb)</span> <span class="c">next</span>
+<span class="y">8	    while (left &lt; right) {</span>
+<span class="p">(gdb)</span> <span class="c">display left</span>
+<span class="o">1: left = 0</span>
+<span class="p">(gdb)</span> <span class="c">display right</span>
+<span class="o">2: right = 17</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>команда</th><th>что делает</th></tr><tr><td class="cmd">break IntegerSqrt</td><td class="dsc">остановиться при входе в функцию</td></tr><tr><td class="cmd">break find_root.cpp:10, b 10</td><td class="dsc">остановиться на строке</td></tr><tr><td class="cmd">info breakpoints</td><td class="dsc">список точек остановки</td></tr><tr><td class="cmd">delete 1</td><td class="dsc">удалить точку №1</td></tr><tr><td class="cmd">next, n</td><td class="dsc">следующая строка, в функции не заходим</td></tr><tr><td class="cmd">step, s</td><td class="dsc">следующая строка, заходим внутрь вызова</td></tr><tr><td class="cmd">continue, c</td><td class="dsc">работать до следующей остановки</td></tr><tr><td class="cmd">finish</td><td class="dsc">доработать текущую функцию и выйти из неё</td></tr><tr><td class="cmd">display x</td><td class="dsc">показывать x после каждого шага</td></tr><tr><td class="cmd">info locals</td><td class="dsc">все локальные переменные</td></tr></table></div></div></div>
+  </div>
+</section>
+
+<!-- 28 -->
+<section class="slide" data-sec="gdb" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">gdb</span></div><h2>Программа висит: Ctrl+C</h2>
+<div class="cols two"><div class="stack"><span class="label">целый корень бинпоиском</span><pre class="code xsmall"><span class="k">long</span> <span class="k">long</span> IntegerSqrt(<span class="k">long</span> <span class="k">long</span> n) {
+    <span class="k">long</span> <span class="k">long</span> left = <span class="num">0</span>;
+    <span class="k">long</span> <span class="k">long</span> right = n;
+    <span class="k">while</span> (left &lt; right) {
+        <span class="k">long</span> <span class="k">long</span> middle = (left + right) / <span class="num">2</span>;
+        <span class="k">if</span> (middle * middle &lt;= n) {
+            left = middle;
+        } <span class="k">else</span> {
+            right = middle - <span class="num">1</span>;
+        }
+    }
+    <span class="k">return</span> left;
+}</pre></div><div class="stack"><div class="term small"><span class="p">(gdb)</span> <span class="c">continue</span>
+<span class="cm"># висит… нажимаем Ctrl+C</span>
+<span class="e">Program received signal SIGINT, Interrupt.</span>
+<span class="o">IntegerSqrt (n=17) at find_root.cpp:10</span>
+<span class="y">10	        if (middle * middle &lt;= n) {</span>
+<span class="o">1: left = 3</span>
+<span class="o">2: right = 4</span>
+<span class="p">(gdb)</span> <span class="c">info locals</span>
+<span class="o">middle = 3</span>
+<span class="o">left = 3</span>
+<span class="o">right = 4</span>
+<span class="p">(gdb)</span> <span class="c">bt</span>
+<span class="y">#0  IntegerSqrt (n=17) at find_root.cpp:10</span>
+<span class="y">#1  0x0000555555555220 in main () at find_root.cpp:22</span></div><div class="panel pin"><h3>Что видно</h3><p><code>left = 3</code>, <code>right = 4</code>, <code>middle = 3</code>. <code>3 * 3 &lt;= 17</code> → <code>left = middle = 3</code>. Отрезок не уменьшается — вечный цикл.</p><p>Пока <code>middle</code> округляется вниз, при <code>left = middle</code> отрезок из двух чисел не меняется. Нужно <code>middle = (left + right + 1) / 2</code>.</p></div></div></div>
+  </div>
+</section>
+
+<!-- 29 -->
+<section class="slide" data-sec="gdb" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">gdb</span></div><h2>watch, list, attach, coredump</h2>
+<div class="cols two"><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>команда</th><th>что делает</th></tr><tr><td class="cmd">list, l</td><td class="dsc">показать код вокруг текущей строки</td></tr><tr><td class="cmd">watch sum</td><td class="dsc">остановиться, когда <code>sum</code> изменится</td></tr><tr><td class="cmd">break 10 if i == 5</td><td class="dsc">остановиться на строке 10, только когда <code>i == 5</code></td></tr><tr><td class="cmd">set var left = 0</td><td class="dsc">поменять значение переменной на ходу</td></tr><tr><td class="cmd">up, down</td><td class="dsc">подняться к вызывающей функции и обратно</td></tr><tr><td class="cmd">quit, q</td><td class="dsc">выйти</td></tr></table></div><p class="hint">Нажать Enter в gdb — повторить прошлую команду. Удобно, когда идёте по шагам через <code>next</code>.</p></div><div class="stack"><div class="panel pin"><h3>Подключиться к запущенной программе</h3><div class="term small"><span class="p">$</span> <span class="c">./find_root &lt; input.txt &amp;</span>
+<span class="o">[1] 4242</span>
+<span class="p">$</span> <span class="c">gdb -p 4242</span>
+<span class="cm"># или: gdb -p $(pgrep find_root)</span>
+<span class="p">(gdb)</span> <span class="c">bt</span></div><p>Когда программа уже висит.</p></div><div class="panel "><h3>Разобрать упавшую программу: coredump</h3><div class="term small"><span class="p">$</span> <span class="c">ulimit -c unlimited</span>
+<span class="p">$</span> <span class="c">./pairs</span>
+<span class="o">Segmentation fault (core dumped)</span>
+<span class="p">$</span> <span class="c">gdb ./pairs core</span>
+<span class="cm"># Mac: lldb -c core ./pairs</span>
+<span class="p">(gdb)</span> <span class="c">bt</span></div><p>Core-файл — память программы в момент падения: стек и переменные.</p></div></div></div>
+  </div>
+</section>
+
+<!-- 30 -->
+<section class="slide" data-sec="IDE" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">IDE</span></div><h2>Отладка в VS Code и CLion</h2>
+<div class="cols two"><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>действие</th><th>gdb</th><th>VS Code</th><th>CLion</th></tr><tr><td class="cmd">поставить брейкпоинт</td><td class="dsc"><code>break 10</code></td><td class="dsc">клик слева от номера строки, F9</td><td class="dsc">клик слева от номера строки, Ctrl+F8</td></tr><tr><td class="cmd">запустить отладку</td><td class="dsc"><code>run</code></td><td class="dsc">F5</td><td class="dsc">Shift+F9</td></tr><tr><td class="cmd">следующая строка</td><td class="dsc"><code>next</code></td><td class="dsc">F10</td><td class="dsc">F8</td></tr><tr><td class="cmd">зайти в функцию</td><td class="dsc"><code>step</code></td><td class="dsc">F11</td><td class="dsc">F7</td></tr><tr><td class="cmd">выйти из функции</td><td class="dsc"><code>finish</code></td><td class="dsc">Shift+F11</td><td class="dsc">Shift+F8</td></tr><tr><td class="cmd">продолжить</td><td class="dsc"><code>continue</code></td><td class="dsc">F5</td><td class="dsc">F9</td></tr><tr><td class="cmd">значения</td><td class="dsc"><code>print</code>, <code>info locals</code></td><td class="dsc">панель Variables, Watch</td><td class="dsc">панель Variables, Watches</td></tr><tr><td class="cmd">стек</td><td class="dsc"><code>bt</code></td><td class="dsc">панель Call Stack</td><td class="dsc">панель Frames</td></tr></table></div></div><div class="stack"><div class="panel pin"><h3>Как устроено</h3><ul><li>VS Code (расширение C/C++) и CLion запускают gdb или lldb</li><li>кнопки отправляют те же команды</li><li>условный брейкпоинт: правый клик по брейкпоинту → условие <code>i == 5</code></li></ul></div><p class="hint">Сочетания клавиш — по умолчанию для Windows и Linux. На Mac в CLion вместо Ctrl обычно Cmd, а продолжить — Cmd+Alt+R.</p></div></div>
+  </div>
+</section>
+
+<!-- 31 -->
+<section class="slide" data-sec="Задача" data-time="д/з" data-timer="900" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача</span></div><h2>Домашнее задание: почему упала программа</h2>
+<div class="cols two"><div class="stack"><div class="panel pin"><h3>core/ из seminar5.zip</h3><p><code>positive</code> — программа (Linux x86-64), <code>core</code> — её память в момент падения. Исходника нет.</p><ol class="steps"><li>откройте core: Ubuntu — <code>gdb ./positive core</code>, Mac — <code>lldb -c core ./positive</code></li><li>каким сигналом завершилась программа?</li><li><code>bt</code>: в какой функции программы и в какой строке всё случилось?</li><li>перейдите в этот кадр: какое число ввели?</li><li>перейдите в <code>main</code>: каким по счёту было это число, какая сумма успела накопиться?</li></ol></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>действие</th><th>gdb</th><th>lldb</th></tr><tr><td class="cmd">открыть</td><td class="dsc"><code>gdb ./positive core</code></td><td class="dsc"><code>lldb -c core ./positive</code></td></tr><tr><td class="cmd">стек</td><td class="dsc"><code>bt</code></td><td class="dsc"><code>bt</code></td></tr><tr><td class="cmd">перейти в кадр</td><td class="dsc"><code>frame 7</code></td><td class="dsc"><code>frame select 7</code></td></tr><tr><td class="cmd">переменные</td><td class="dsc"><code>info locals</code></td><td class="dsc"><code>frame variable</code></td></tr></table></div></div></div>
+  </div>
+</section>
+
+</div>
+
+<div id="notes" hidden><h4>Заметки семинаристу<span id="notes-time"></span></h4><ul id="notes-body"></ul></div>
+
+<div class="bar">
+  <button id="prev" aria-label="Предыдущий слайд">←</button>
+  <button id="next" aria-label="Дальше">→</button>
+  <span class="counter"><b id="cur">1</b> / <span id="total">0</span></span>
+  <button id="timer" hidden>таймер 0:00</button>
+  <span class="spacer"></span>
+  <span class="counter" id="secname"></span>
+  <span class="keys-hint">→ дальше и ответы · T таймер · D тема</span>
+  
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var notes = document.getElementById('notes');
+  var notesBody = document.getElementById('notes-body');
+  var notesOpen = false;
+
+  var timerBtn = document.getElementById('timer');
+  var tLeft = 0, tOwner = -1, tRunning = false, tHandle = null;
+
+  function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  function drawTimer() {
+    if (timerBtn.classList.contains('done')) { timerBtn.textContent = 'время вышло'; return; }
+    timerBtn.textContent = (tRunning ? 'идёт ' : 'таймер ') + fmt(tLeft);
+  }
+  function stopTimer() { tRunning = false; clearInterval(tHandle); timerBtn.classList.remove('running'); }
+  function toggleTimer() {
+    if (timerBtn.hidden) return;
+    if (timerBtn.classList.contains('done')) {
+      timerBtn.classList.remove('done');
+      tLeft = +(slides[tOwner] && slides[tOwner].dataset.timer || 0);
+      drawTimer(); return;
+    }
+    if (tRunning) { stopTimer(); drawTimer(); return; }
+    if (tLeft <= 0) return;
+    tRunning = true; timerBtn.classList.add('running');
+    tHandle = setInterval(function () {
+      tLeft -= 1;
+      if (tLeft <= 0) { tLeft = 0; stopTimer(); timerBtn.classList.add('done'); }
+      drawTimer();
+    }, 1000);
+    drawTimer();
+  }
+
+  document.getElementById('total').textContent = slides.length;
+
+  function render() {
+    slides.forEach(function (s, n) { s.classList.toggle('is-active', n === i); });
+    var s = slides[i];
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('progress').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('secname').textContent = s.dataset.sec || '';
+    notesBody.innerHTML = s.dataset.notes || '<li>—</li>';
+    var t = s.dataset.time || '';
+    document.getElementById('notes-time').textContent = t ? '  ·  ' + t : '';
+
+    var dur = +(s.dataset.timer || 0);
+    if (dur && !tRunning && tOwner !== i) {
+      tLeft = dur; tOwner = i; timerBtn.classList.remove('done');
+    }
+    timerBtn.hidden = !(dur || tRunning);
+    drawTimer();
+
+    window.scrollTo(0, 0);
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+  }
+
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  function show(r) {
+    r.classList.add('shown');
+    if (r.hasAttribute('data-answer')) {
+      var sl = r.closest('.slide');
+      if (sl) sl.classList.add('answered');
+    }
+  }
+  function revealNext() {
+    var r = slides[i].querySelector('.reveal:not(.shown)');
+    if (r) { show(r); return true; }
+    return false;
+  }
+  function next() { if (!revealNext()) go(i + 1); }
+
+  function toggleNotes() {
+    notesOpen = !notesOpen;
+    notes.hidden = !notesOpen;
+    document.getElementById('notes-btn').classList.toggle('on', notesOpen);
+  }
+  function toggleTheme() {
+    var root = document.documentElement;
+    var cur = root.getAttribute('data-theme');
+    if (!cur) cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.reveal'), function (r) {
+    r.setAttribute('tabindex', '0');
+    r.setAttribute('role', 'button');
+    r.addEventListener('click', function () { if (!r.classList.contains('shown')) show(r); });
+    r.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter') && !r.classList.contains('shown')) { e.preventDefault(); e.stopPropagation(); show(r); }
+    });
+  });
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', function () { go(i - 1); });
+  
+  timerBtn.addEventListener('click', toggleTimer);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); next(); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (k === 'Home') { e.preventDefault(); go(0); }
+    else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
+    
+    else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); toggleTimer(); }
+    else if (k === 'r' || k === 'R' || k === 'к' || k === 'К') {
+      e.preventDefault();
+      Array.prototype.forEach.call(slides[i].querySelectorAll('.reveal:not(.shown)'), show);
+    }
+    else if (k === 'd' || k === 'D' || k === 'в' || k === 'В') { e.preventDefault(); toggleTheme(); }
+    else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') {
+      e.preventDefault();
+      if (document.fullscreenElement) { document.exitFullscreen(); }
+      else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
+    }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) { i = Math.max(0, Math.min(slides.length - 1, parseInt(m[1], 10) - 1)); }
+  render();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;font:14px/1.5 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Ассемблер, указатели, массивы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* ── Палитра снята с диагностики gcc/clang: magenta = warning, cyan = note,
+      red = error, green = приглашение шелла. Нейтрали уведены в фиолетовый. ── */
+:root {
+  --paper:      #FAF8FC;
+  --paper-2:    #F1EDF6;
+  --rail:       #E4DCEE;
+  --ink:        #1B1524;
+  --ink-soft:   #57496B;
+  --ink-faint:  #8A7CA0;
+  --accent:     #B01490;
+  --accent-dim: #F6E4F3;
+  --note:       #0B6F7C;
+  --err:        #C42430;
+  --ok:         #12704F;
+  --term-bg:    #211A2C;
+  --term-fg:    #EDE6F4;
+  --term-dim:   #A493B8;
+  --shadow:     0 1px 2px rgba(27,21,36,.06), 0 12px 32px -18px rgba(27,21,36,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #150F1D;
+    --paper-2:    #1E1729;
+    --rail:       #322646;
+    --ink:        #F2ECF8;
+    --ink-soft:   #B5A6C8;
+    --ink-faint:  #7E6E94;
+    --accent:     #F175D2;
+    --accent-dim: #2C1B31;
+    --note:       #52CFDA;
+    --err:        #FF7A80;
+    --ok:         #4FD9A7;
+    --term-bg:    #0D0913;
+    --term-fg:    #EDE6F4;
+    --term-dim:   #9585AA;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#150F1D; --paper-2:#1E1729; --rail:#322646; --ink:#F2ECF8;
+  --ink-soft:#B5A6C8; --ink-faint:#7E6E94; --accent:#F175D2; --accent-dim:#2C1B31;
+  --note:#52CFDA; --err:#FF7A80; --ok:#4FD9A7; --term-bg:#0D0913; --term-fg:#EDE6F4;
+  --term-dim:#9585AA;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(15px, 1.35vw, 19px);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .display {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+code, kbd, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+
+/* ── каркас колоды ── */
+.progress {
+  position: fixed; inset: 0 auto auto 0; height: 3px; width: 0;
+  background: var(--accent); z-index: 40; transition: width .25s ease;
+}
+.deck { min-height: 100svh; display: flex; flex-direction: column; }
+.slide {
+  display: none;
+  flex: 1; min-height: 100svh;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1.1rem, 5vw, 5rem) clamp(4.5rem, 8vh, 6rem);
+  flex-direction: column; justify-content: center; gap: clamp(1rem, 2.2vh, 1.9rem);
+}
+.slide.is-active { display: flex; }
+.wrap { width: 100%; max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: clamp(.9rem, 2vh, 1.7rem); }
+
+/* ── шапка слайда: секция + бюджет времени ── */
+.eyebrow { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; }
+.eyebrow .sec {
+  font-family: "JetBrains Mono", monospace; font-size: .72em; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+.eyebrow .clock {
+  font-family: "JetBrains Mono", monospace; font-size: .7em; color: var(--ink-faint);
+  border: 1px solid var(--rail); border-radius: 999px; padding: .1em .7em;
+  font-variant-numeric: tabular-nums;
+}
+h2 { font-size: clamp(1.8rem, 4.2vw, 3.3rem); }
+.sub { color: var(--ink-soft); max-width: 62ch; font-size: 1.06em; }
+
+/* ── терминал ── */
+.term {
+  background: var(--term-bg); color: var(--term-fg); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.4rem) clamp(1rem, 2vw, 1.5rem);
+  font-family: "JetBrains Mono", monospace; font-size: clamp(.78rem, 1.15vw, 1.02rem);
+  line-height: 1.65; overflow-x: auto; box-shadow: var(--shadow);
+  white-space: pre; tab-size: 4;
+}
+.term .p { color: var(--ok); font-weight: 700; }
+.term .c { color: var(--term-fg); font-weight: 700; }
+.term .o { color: var(--term-dim); }
+.term .e { color: #FF7A80; font-weight: 700; }
+.term .w { color: #F175D2; font-weight: 700; }
+.term .n { color: #52CFDA; }
+.term .cm { color: var(--term-dim); font-style: italic; }
+
+/* ── код на «бумаге» ── */
+pre.code {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.3rem) clamp(1rem, 2vw, 1.4rem); margin: 0;
+  font-size: clamp(.8rem, 1.2vw, 1.05rem); line-height: 1.6; overflow-x: auto;
+}
+pre.code .k { color: var(--accent); font-weight: 700; }
+pre.code .s { color: var(--ok); }
+pre.code .pp { color: var(--note); }
+pre.code .cm { color: var(--ink-faint); font-style: italic; }
+pre.code .hl { background: var(--accent-dim); border-radius: 3px; padding: 0 .15em; }
+
+/* ── сетки ── */
+.cols { display: grid; gap: clamp(.8rem, 1.6vw, 1.4rem); }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.cols.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.panel {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 12px;
+  padding: clamp(.9rem, 1.7vw, 1.3rem); display: flex; flex-direction: column; gap: .5rem;
+}
+.panel h3 { font-size: 1.12em; }
+.panel p { margin: 0; color: var(--ink-soft); font-size: .95em; }
+.panel ul { margin: 0; padding-left: 1.1em; color: var(--ink-soft); font-size: .95em; }
+.panel li + li { margin-top: .3em; }
+
+/* один выделенный блок, а не «всё карточки» */
+.pin { background: var(--accent-dim); border-color: transparent; }
+.pin h3 { color: var(--accent); }
+.pin p, .pin ul { color: var(--ink); }
+
+/* ── таблица команд ── */
+table { border-collapse: collapse; width: 100%; font-size: clamp(.82rem, 1.15vw, 1rem); }
+th, td { text-align: left; padding: .42em .8em .42em 0; border-bottom: 1px solid var(--rail); vertical-align: baseline; }
+th { color: var(--ink-faint); font-weight: 600; font-size: .8em; text-transform: uppercase; letter-spacing: .08em; }
+td.cmd { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+td.dsc { color: var(--ink-soft); }
+.table-scroll { overflow-x: auto; }
+
+/* ── таймлайн стандартов: порядок здесь несёт смысл ── */
+.timeline { display: flex; gap: 0; overflow-x: auto; padding-bottom: .4rem; }
+.tl-step { flex: 1 0 auto; min-width: 108px; padding: 0 .75rem; border-left: 2px solid var(--rail); }
+.tl-step:first-child { border-left-color: var(--accent); }
+.tl-step .y { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 1.05em; }
+.tl-step .what { color: var(--ink-soft); font-size: .85em; display: block; margin-top: .2em; }
+.tl-step.now { border-left-color: var(--accent); }
+.tl-step.now .y { color: var(--accent); }
+
+/* ── конвейер сборки: настоящая последовательность, порядок обязателен ── */
+.pipe { display: flex; align-items: stretch; gap: .3rem; overflow-x: auto; padding-bottom: .4rem; }
+.node {
+  flex: 0 0 auto; min-width: 132px; display: flex; flex-direction: column; gap: .1rem;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: clamp(.55rem, 1.1vw, .85rem) clamp(.6rem, 1.2vw, 1rem);
+}
+.node .fn { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: clamp(.82rem, 1.2vw, 1.02rem); }
+.node .fd { font-size: .76em; color: var(--ink-faint); line-height: 1.35; }
+.node.start .fn { color: var(--ink); }
+.node.done { background: var(--accent-dim); border-color: transparent; }
+.node.done .fn { color: var(--accent); }
+.node.done .fd { color: var(--ink-soft); }
+.step {
+  flex: 0 0 auto; min-width: 104px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .05rem; padding: 0 .25rem;
+}
+.step .tool { font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-align: center; }
+.step .glyph { color: var(--ink-faint); font-size: 1.15em; line-height: 1; }
+.step .flag { font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); }
+
+/* ── повестка: пять смысловых групп, порядок несёт смысл ── */
+.plan { display: flex; flex-direction: column; gap: clamp(.5rem, 1.4vh, 1.05rem); }
+.phase {
+  display: grid; grid-template-columns: minmax(148px, 215px) 1fr;
+  gap: clamp(.5rem, 1.6vw, 1.4rem); align-items: start;
+  padding-left: clamp(.7rem, 1.4vw, 1.15rem);
+  border-left: 2px solid var(--rail);
+}
+.phase.focus { border-left-color: var(--accent); }
+.phase-head { display: flex; align-items: baseline; }
+.phase-name {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(.95rem, 1.5vw, 1.28rem); letter-spacing: -.015em; line-height: 1.15;
+}
+.phase.focus .phase-name { color: var(--accent); }
+.phase-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.phase-items li { display: flex; align-items: baseline; gap: .9rem; padding: .24em 0; }
+.phase-items li + li { border-top: 1px solid var(--rail); }
+.phase-items .pt { flex: 1; }
+.phase-items .pd {
+  font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+@media (max-width: 660px) { .phase { grid-template-columns: 1fr; gap: .2rem; } }
+
+/* ── титул ── */
+.hero-num {
+  font-family: "JetBrains Mono", monospace; color: var(--accent); font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase; font-size: .82em;
+}
+h1 { font-size: clamp(2.4rem, 7vw, 5.4rem); }
+.hero-line { height: 2px; background: var(--accent); width: 84px; }
+
+/* ── подвал ── */
+.bar {
+  position: fixed; inset: auto 0 0 0; z-index: 30;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .5rem clamp(.7rem, 3vw, 1.6rem);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--rail);
+  font-family: "JetBrains Mono", monospace; font-size: .78rem;
+}
+.bar .spacer { flex: 1; }
+button {
+  font-family: "JetBrains Mono", monospace; font-size: .78rem; cursor: pointer;
+  background: transparent; color: var(--ink-soft); border: 1px solid var(--rail);
+  border-radius: 7px; padding: .3em .7em;
+}
+button:hover { color: var(--accent); border-color: var(--accent); }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.counter { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.counter b { color: var(--ink); }
+
+/* ── заметки докладчика ── */
+#notes {
+  position: fixed; inset: auto 0 0 0; z-index: 35;
+  background: var(--term-bg); color: var(--term-fg);
+  border-top: 2px solid var(--accent);
+  padding: 1rem clamp(.8rem, 3vw, 1.8rem) 3.1rem;
+  max-height: 52svh; overflow-y: auto;
+  font-size: clamp(.8rem, 1.1vw, .95rem); line-height: 1.55;
+}
+#notes h4 {
+  margin: 0 0 .5rem; font-family: "JetBrains Mono", monospace; font-size: .72rem;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+#notes ul { margin: 0; padding-left: 1.15em; }
+#notes li + li { margin-top: .35em; }
+#notes code { color: #F175D2; }
+#notes-time { color: var(--term-dim); letter-spacing: .08em; }
+
+kbd {
+  border: 1px solid var(--rail); border-bottom-width: 2px; border-radius: 5px;
+  padding: .05em .4em; font-size: .85em; color: var(--ink-soft);
+}
+.hint { color: var(--ink-faint); font-size: .9em; }
+strong { color: var(--ink); font-weight: 600; }
+.big { font-size: clamp(1.1rem, 1.9vw, 1.45rem); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* ══ seminar 2: вопросы, раскрытие ответов, задачи, таймер ══ */
+
+/* ответ скрыт, но место под него занято — слайд не прыгает при раскрытии */
+.reveal { position: relative; border-radius: 12px; min-height: 3.2rem; }
+.reveal:not(.shown) { cursor: pointer; }
+.reveal:not(.shown) > * { visibility: hidden; }
+.reveal:not(.shown)::after {
+  content: attr(data-label);
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--rail); border-radius: 12px; background: var(--paper);
+  font-family: "JetBrains Mono", monospace; font-size: .82em; letter-spacing: .04em; color: var(--ink-faint);
+}
+.reveal:not(.shown):hover::after,
+.reveal:not(.shown):focus-visible::after { border-color: var(--accent); color: var(--accent); }
+.reveal:focus-visible { outline: none; }
+.reveal.shown { animation: rv .2s ease-out; }
+@keyframes rv { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* варианты ответа: зал показывает номер на пальцах */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .55rem; }
+.opt {
+  display: flex; gap: .7rem; align-items: baseline;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: .5rem .85rem; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem);
+  /* длинные варианты переносятся, а не уезжают за край экрана; pre-wrap бережёт пробелы в выводе программ */
+  white-space: pre-wrap; overflow-wrap: anywhere; transition: background .2s, border-color .2s, opacity .2s;
+}
+.opt .n { font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+.opt > span:last-child { min-width: 0; }
+.slide.answered .opt { opacity: .45; }
+.slide.answered .opt.correct { opacity: 1; background: var(--accent-dim); border-color: var(--accent); }
+
+.ask {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(1.05rem, 1.9vw, 1.45rem); letter-spacing: -.01em;
+}
+.label {
+  font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint);
+}
+.stack { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+
+/* ответ: вывод программы + объяснение */
+.answer { display: flex; flex-direction: column; gap: .6rem; }
+.answer .why { background: var(--accent-dim); border-radius: 10px; padding: .75rem 1rem; color: var(--ink); font-size: .96em; }
+.answer .why p + p { margin-top: .45rem; }
+
+/* задачи */
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .7rem; }
+.lvl {
+  display: inline-block; font-family: "JetBrains Mono", monospace; font-size: .66em; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor;
+  border-radius: 999px; padding: .08em .6em; vertical-align: .2em; margin-left: .45em;
+}
+.lvl.l1 { color: var(--ok); }
+.lvl.l2 { color: var(--note); }
+.lvl.l3 { color: var(--accent); }
+.tasklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .7rem; }
+.tasklist .panel h3 { font-size: 1em; }
+pre.code.small, .term.small { font-size: clamp(.72rem, 1vw, .9rem); line-height: 1.5; }
+pre.code .num { color: var(--note); }
+
+/* таймер в подвале */
+#timer { font-variant-numeric: tabular-nums; }
+#timer.running { color: var(--accent); border-color: var(--accent); }
+#timer.done { color: var(--err); border-color: var(--err); }
+.keys-hint { color: var(--ink-faint); font-size: .72rem; }
+@media (max-width: 760px) { .keys-hint { display: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal.shown { animation: none; } }
+
+/* подпись под фрагментом: откуда он */
+.src { font-family: "JetBrains Mono", monospace; font-size: .68em; color: var(--ink-faint); line-height: 1.4; }
+.src code { font-size: 1em; }
+
+/* входной буфер: какие символы кто прочитал */
+.buf { display: flex; flex-wrap: wrap; gap: 4px; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem); }
+.buf .ch { border: 1px solid var(--rail); border-radius: 6px; padding: .15em .5em; background: var(--paper-2); min-width: 1.7em; text-align: center; }
+.buf .ch.nl { color: var(--note); font-weight: 700; }
+.buf .ch.a, .buf-legend i.a { background: var(--accent-dim); border-color: var(--accent); }
+.buf .ch.g, .buf-legend i.g { background: color-mix(in srgb, var(--note) 20%, var(--paper)); border-color: var(--note); }
+.buf .ch.rest { opacity: .45; border-style: dashed; }
+.buf-legend { display: flex; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8em; color: var(--ink-soft); }
+.buf-legend i { display: inline-block; width: .95em; height: .95em; border: 1px solid var(--rail); border-radius: 3px; vertical-align: -.12em; margin-right: .35em; }
+.buf-legend i.rest { border-style: dashed; opacity: .6; }
+.buf .ch.w, .buf-legend i.w { background: color-mix(in srgb, var(--ok) 20%, var(--paper)); border-color: var(--ok); }
+
+/* полные программы: чем длиннее, тем мельче; и страховка от выхода за экран */
+pre.code.xsmall { font-size: clamp(.62rem, .85vw, .8rem); line-height: 1.42; }
+pre.code { max-height: 74svh; overflow: auto; }
+
+/* текст на всю ширину */
+.slide .sub { max-width: none; }
+body .doc { max-width: 1100px; }
+body .doc .lede { max-width: none; }
+
+/* шире на больших экранах, таблицы без лишней прокрутки */
+.wrap { max-width: min(1680px, 94vw); }
+.cols > * { min-width: 0; }
+.slide table td.cmd { white-space: normal; }
+
+.bar button.on { color: var(--accent); border-color: var(--accent); }
+
+/* режимы vim: Normal в центре, остальные вокруг */
+.modes { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; gap: .6rem .5rem; align-items: center; }
+.mode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .65rem .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.mode b { font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-size: 1.12em; }
+.mode small { color: var(--ink-soft); font-size: .86em; line-height: 1.35; }
+.mode.main { grid-column: 3; grid-row: 1 / span 2; align-self: stretch; justify-content: center; text-align: center; background: var(--accent-dim); border-color: transparent; }
+.mode.main b { color: var(--accent); font-size: 1.6em; }
+.edge { display: flex; flex-direction: column; align-items: center; gap: .15rem; font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint); white-space: nowrap; }
+.edge .to { color: var(--accent); font-weight: 700; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } .mode.main { grid-column: auto; grid-row: auto; } .edge { flex-direction: row; gap: .8rem; } }
+.keys td.cmd { white-space: nowrap; }
+.vis { color: var(--err); }
+
+.flow { display: flex; align-items: stretch; gap: .45rem; flex-wrap: wrap; }
+.fnode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .6rem .75rem; display: flex; flex-direction: column; gap: .1rem; flex: 1 1 0; min-width: 0; }
+.fnode b { font-family: "JetBrains Mono", monospace; font-size: 1em; }
+.fnode small { color: var(--ink-soft); font-size: .84em; line-height: 1.3; }
+.fnode.out { background: var(--accent-dim); border-color: transparent; }
+.fnode.out b { color: var(--accent); }
+.arr { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); white-space: nowrap; }
+.arr b { color: var(--accent); font-weight: 700; }
+@media (max-width: 900px) { .flow { flex-direction: column; } .arr { flex-direction: row; gap: .5rem; } }
+ol.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: .4rem; }
+ol.steps code { white-space: nowrap; }
+.mini { font-size: .92em; }
+.slide table td.cmd code { white-space: nowrap; }
+</style>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section class="slide is-active" data-sec="Семинар 4" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    
+<div class="hero-num">C++ · 1 курс · семинар 04</div>
+<h1>Ассемблер, указатели и массивы</h1>
+<div class="hero-line"></div>
+<p class="sub big">Что компилятор делает с вашим кодом, и как C++ работает с памятью напрямую</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-sec="Напоминание" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Напоминание</span></div><h2>Где мы были в прошлый раз</h2>
+<div class="flow"><div class="fnode"><b>main.cpp</b><small>то, что написали вы</small></div><div class="arr"><b>-E</b><span>препроцессор</span></div><div class="fnode"><b>main.ii</b><small>текст после #include</small></div><div class="arr"><b>-S</b><span>компиляция</span></div><div class="fnode out"><b>main.s</b><small>ассемблер: смотрим сегодня</small></div><div class="arr"><b>-c</b><span>ассемблирование</span></div><div class="fnode out"><b>main.o</b><small>объектный файл: смотрим через nm</small></div><div class="arr"><b>g++ *.o</b><span>линковка</span></div><div class="fnode"><b>программа</b><small>её можно запустить</small></div></div>
+<div class="cols two">
+  <div class="panel pin"><h3>Компиляция</h3><p>Перевод C++ в ассемблер: текст, где каждая строка — одна простая команда процессора. Здесь работает оптимизатор.</p></div>
+  <div class="panel"><h3>Ассемблирование</h3><p>Перевод ассемблера в байты машинного кода, почти один в один. Результат — объектный файл <code>.o</code>. В нём ещё нет адресов чужих функций.</p></div>
+</div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-sec="Ассемблер" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Ассемблер</span></div><h2>Из чего состоит ассемблер</h2>
+<div class="cols two"><div class="stack"><span class="label">square.cpp</span><pre class="code small"><span class="k">int</span> square(<span class="k">int</span> x) {
+    <span class="k">return</span> x * x;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -S square.cpp</span>
+<span class="p">$</span> <span class="c">less square.s</span></div><span class="label">square.s, строки с точкой (.cfi…, .LFB0) убраны</span><pre class="code xsmall"><span class="k">_Z6squarei:                </span><span class="cm"># метка: здесь начинается square(int)</span>
+    endbr64                <span class="cm"># отметка «сюда можно прыгать», пропускаем</span>
+    pushq   %rbp           <span class="cm"># сохранить старый rbp на стек</span>
+    movq    %rsp, %rbp     <span class="cm"># rbp = вершина стека</span>
+    movl    %edi, <span class="num">-4</span>(%rbp) <span class="cm"># положить x (он пришёл в edi) в память</span>
+    movl    <span class="num">-4</span>(%rbp), %eax <span class="cm"># eax = x</span>
+    imull   %eax, %eax     <span class="cm"># eax = eax * eax</span>
+    popq    %rbp           <span class="cm"># вернуть старый rbp</span>
+    ret                    <span class="cm"># выйти, ответ лежит в eax</span></pre><p class="hint">Строки, которые начинаются с точки, — служебные пометки для ассемблера. Их можно не читать: из 40 строк файла кода здесь 9.</p></div><div class="stack"><div class="panel pin"><h3>Строка ассемблера — одна команда процессора</h3><ul><li><b>метка</b> <code>_Z6squarei:</code> — имя места в коде. Так компилятор записал <code>square(int)</code></li><li><b>инструкция</b> <code>movl</code>, <code>imull</code>, <code>ret</code> — что сделать</li><li><b>операнды</b> — с чем: регистр, число или память</li></ul></div><div class="table-scroll"><table class="keys mini"><tr><th>что</th><th>смысл</th></tr><tr><td class="cmd">%rax, %rdi, %rsp…</td><td class="dsc">регистры: 16 ячеек по 8 байт прямо в процессоре. <code>%eax</code> — младшие 4 байта <code>%rax</code></td></tr><tr><td class="cmd">%edi, %esi</td><td class="dsc">сюда кладут 1-й и 2-й аргумент функции</td></tr><tr><td class="cmd">%eax</td><td class="dsc">отсюда забирают результат</td></tr><tr><td class="cmd">$5</td><td class="dsc">знак доллара — просто число 5</td></tr><tr><td class="cmd">-4(%rbp)</td><td class="dsc">ячейка памяти по адресу <code>rbp − 4</code></td></tr><tr><td class="cmd">movl a, b</td><td class="dsc">b = a: <b>откуда</b> слева, <b>куда</b> справа</td></tr><tr><td class="cmd">…l, …q</td><td class="dsc">буква в конце — размер: <code>l</code> — 4 байта (int), <code>q</code> — 8 байт</td></tr><tr><td class="cmd">add / imul / cmp</td><td class="dsc">сложить, умножить, сравнить</td></tr><tr><td class="cmd">jmp / jl / call / ret</td><td class="dsc">перейти, перейти если меньше, вызвать функцию, вернуться</td></tr></table></div></div></div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-sec="Флаги" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Флаги</span></div><h2>Флаги: что писать в Compiler options</h2>
+<div class="cols two"><div class="stack"><div class="table-scroll"><table class="keys mini"><tr><th>флаг</th><th>что делает</th></tr><tr><td class="cmd">-O0</td><td class="dsc">по умолчанию: переводить буквально, каждая переменная лежит в памяти</td></tr><tr><td class="cmd">-O1</td><td class="dsc">простые улучшения: переменные в регистрах, лишнее выброшено</td></tr><tr><td class="cmd">-O2</td><td class="dsc">обычный рабочий режим: почти все оптимизации</td></tr><tr><td class="cmd">-O3</td><td class="dsc">плюс агрессивные: развернуть циклы, считать по 4 числа за раз</td></tr><tr><td class="cmd">-Os</td><td class="dsc">оптимизировать на размер кода, а не на скорость</td></tr><tr><td class="cmd">-Og</td><td class="dsc">оптимизировать, но так, чтобы отладчик видел все переменные</td></tr><tr><td class="cmd">-std=c++20</td><td class="dsc">какой стандарт языка. Не влияет на скорость</td></tr><tr><td class="cmd">-Wall -Wextra</td><td class="dsc">предупреждения</td></tr><tr><td class="cmd">-g</td><td class="dsc">добавить отладочную информацию: какая строка кода какой инструкции соответствует</td></tr></table></div></div><div class="stack"><span class="label">sum_to: короче ≠ быстрее (g++ 13, сумма до 100 000, 20 000 раз)</span><div class="table-scroll"><table class="keys mini"><tr><th>флаг</th><th>инструкций</th><th>время</th></tr><tr><td class="cmd">-O0</td><td class="cmd">15</td><td class="cmd">6,2 с</td></tr><tr><td class="cmd">-O2</td><td class="cmd">18</td><td class="cmd">1,1 с</td></tr><tr><td class="cmd">-O3</td><td class="cmd">73</td><td class="cmd">0,24 с</td></tr></table></div><p class="hint">На <code>-O3</code> код в 5 раз длиннее, но в 25 раз быстрее: инструкция <code>paddd</code> складывает 4 числа за раз.</p></div></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-sec="Задача" data-time="7 мин" data-timer="300" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача</span></div><h2>Задача 1: поиграйте с godbolt</h2>
+<p class="sub">Файл <code>godbolt/sum.cpp</code>. Вставьте его в godbolt и ответьте на вопросы.</p><div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> sum_to(<span class="k">int</span> n) {
+    <span class="k">int</span> total = <span class="num">0</span>;
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">0</span>; i &lt; n; ++i) {
+        total += i;
+    }
+    <span class="k">return</span> total;
+}</pre></div><div class="stack"><div class="panel pin"><h3>Вопросы</h3><ol class="steps"><li>найдите цикл в ассемблере при <code>-O0</code>. По какой инструкции видно, что это цикл?</li><li>включите <code>-O2</code> в gcc. Цикл остался?</li><li>откройте второе окно с clang и тоже <code>-O2</code>. А там?</li><li>выберите старую версию gcc, например 4.9, и новую. Есть разница?</li></ol></div><p class="hint">Подсказка: цикл в ассемблере — это переход <code>j…</code> назад, на метку выше.</p></div></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что clang -O2 сделал с циклом?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> sum_to(<span class="k">int</span> n) {
+    <span class="k">int</span> total = <span class="num">0</span>;
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">0</span>; i &lt; n; ++i) {
+        total += i;
+    }
+    <span class="k">return</span> total;
+}</pre><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>оставил цикл как есть</span></div><div class="opt"><span class="n">2</span><span>оставил цикл, но шагает по два</span></div><div class="opt correct"><span class="n">3</span><span>заменил цикл формулой</span></div><div class="opt"><span class="n">4</span><span>выкинул функцию целиком</span></div></div></div><div class="stack"><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><span class="label">clang 18 · -O2</span><pre class="code xsmall"><span class="k">_Z6sum_toi:</span>
+    testl   %edi, %edi
+    jle     .LBB0_1
+    leal    <span class="num">-1</span>(%rdi), %eax
+    leal    <span class="num">-2</span>(%rdi), %ecx
+    imulq   %rax, %rcx
+    shrq    %rcx
+    leal    (%rdi,%rcx), %eax
+    decl    %eax
+    retq
+<span class="k">.LBB0_1:</span>
+    xorl    %eax, %eax
+    retq</pre><div class="why"><p>Переходов назад нет — цикла нет. Осталось умножение <code>imulq</code> и сдвиг <code>shrq</code>, то есть деление на 2. Clang узнал сумму арифметической прогрессии: 0 + 1 + … + (n − 1) = n(n − 1) / 2.</p><p>А gcc 13 цикл оставил, но шагает по две итерации за раз: <code>addl $2, %eax</code>. Это вариант 2.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин · можно пропустить" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Почему int делится на 2 длиннее, чем unsigned?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> div2(<span class="k">int</span> x) {
+    <span class="k">return</span> x / <span class="num">2</span>;
+}
+
+<span class="k">unsigned</span> udiv2(<span class="k">unsigned</span> x) {
+    <span class="k">return</span> x / <span class="num">2</span>;
+}</pre><span class="label">g++ -O2 -S div2.cpp (clang -O2 — так же)</span><pre class="code xsmall"><span class="k">_Z4div2i:</span>
+    movl    %edi, %eax
+    shrl    $<span class="num">31</span>, %eax   <span class="cm"># взять знаковый бит: 1, если x &lt; 0</span>
+    addl    %edi, %eax  <span class="cm"># прибавить его к x</span>
+    sarl    %eax        <span class="cm"># сдвинуть вправо на 1</span>
+    ret
+<span class="k">_Z5udiv2j:</span>
+    movl    %edi, %eax
+    shrl    %eax        <span class="cm"># просто сдвинуть вправо на 1</span>
+    ret</pre></div><div class="stack"><span class="ask">Зачем три лишние инструкции для int?</span><div class="reveal" data-answer data-label="почему так  →"><div class="answer"><div class="why"><p>Сдвиг вправо делит на 2, но округляет <b>вниз</b>: −7 >> 1 = −4. А C++ округляет <b>к нулю</b>: −7 / 2 = −3.</p><p>Поэтому для отрицательных x компилятор сначала прибавляет 1: (−7 + 1) >> 1 = −3. У <code>unsigned</code> отрицательных нет — хватает одного сдвига.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-sec="nm" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">nm</span></div><h2>nm: кто что просит и кто что даёт</h2>
+<div class="cols two"><div class="stack"><span class="label">шаг 1. собрать объектные файлы, без линковки</span><div class="term small"><span class="p">$</span> <span class="c">g++ -c main.cpp -o main.o</span>
+<span class="p">$</span> <span class="c">g++ -c geometry.cpp -o geometry.o</span></div><span class="label">шаг 2. посмотреть, какие имена в каждом</span><div class="term small"><span class="p">$</span> <span class="c">nm main.o</span>
+<span class="o">0000000000000000 T main</span>
+<span class="o">                 U _Z4areaii</span>
+<span class="p">$</span> <span class="c">nm geometry.o</span>
+<span class="o">0000000000000000 T _Z4areaii</span></div><span class="label">шаг 3. то же с -C: имена в виде C++</span><div class="term small"><span class="p">$</span> <span class="c">nm -C main.o</span>
+<span class="o">0000000000000000 T main</span>
+<span class="o">                 U area(int, int)</span>
+<span class="p">$</span> <span class="c">nm -C geometry.o</span>
+<span class="o">0000000000000000 T area(int, int)</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>буква</th><th>смысл</th></tr><tr><td class="cmd">T</td><td class="dsc"><b>есть</b>: тело функции лежит в этом файле (T — text, так называется секция с кодом)</td></tr><tr><td class="cmd">U</td><td class="dsc"><b>нужно</b>: файл вызывает функцию, но её здесь нет (U — undefined). Адреса нет, поэтому слева пусто</td></tr><tr><td class="cmd">D, B, R</td><td class="dsc">глобальные переменные и константы. Маленькая буква — имя видно только внутри файла</td></tr></table></div><div class="panel pin"><h3>Как искать ошибку линковки</h3><ul><li><code>undefined reference to X</code>: в каком-то <code>.o</code> есть <code>U X</code>, а <code>T X</code> нет ни в одном из переданных файлов</li><li><code>multiple definition of X</code>: <code>T X</code> сразу в двух файлах</li><li>линковщик просто ставит каждой <code>U</code> в пару <code>T</code> с тем же именем</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-sec="Линковщик" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Линковщик</span></div><h2>Кто ругается: компилятор или линковщик?</h2>
+<div class="table-scroll"><table class="keys"><tr><th>ситуация</th><th>кто и что скажет</th></tr>
+<tr><td class="dsc">вызвали <code>area(3, 4)</code>, а объявления нет нигде</td><td><div class="reveal" data-label="ответ  →"><span class="vis">компилятор:</span> <code>'area' was not declared in this scope</code></div></td></tr>
+<tr><td class="dsc">объявление в <code>.h</code> есть, <code>geometry.cpp</code> не передали в g++</td><td><div class="reveal" data-label="ответ  →"><span class="vis">линковщик:</span> <code>undefined reference to `area(int, int)'</code></div></td></tr>
+<tr><td class="dsc">объявили <code>area(int, int)</code>, а определили <code>area(double, double)</code></td><td><div class="reveal" data-label="ответ  →"><span class="vis">линковщик:</span> <code>undefined reference</code>. Для него это разные имена: <code>_Z4areaii</code> и <code>_Z4areadd</code></div></td></tr>
+<tr><td class="dsc">тело функции в <code>.h</code>, заголовок подключён в два <code>.cpp</code></td><td><div class="reveal" data-label="ответ  →"><span class="vis">линковщик:</span> <code>multiple definition of `area(int, int)'</code></div></td></tr>
+<tr><td class="dsc">сделали <code>#include "geometry.cpp"</code> в <code>main.cpp</code> и собрали оба файла</td><td><div class="reveal" data-label="ответ  →"><span class="vis">линковщик:</span> <code>multiple definition</code> — тело попало в оба <code>.o</code></div></td></tr>
+</table></div>
+<p class="hint">Правило: в <code>.h</code> — объявления, в <code>.cpp</code> — определения, <code>#include</code> — только заголовков.</p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-sec="Часть 2" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Часть 2</span></div><h2>Часть 2. Указатели и массивы в стиле Си</h2>
+
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-sec="Указатели" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Указатели</span></div><h2>Указатель хранит адрес</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> x = <span class="num">42</span>;
+<span class="k">int</span>* p = &amp;x;
+
+<span class="k">std</span>::printf(<span class="s">"%d\n"</span>, *p);   <span class="cm">// 42</span>
+*p = <span class="num">7</span>;
+<span class="k">std</span>::printf(<span class="s">"%d\n"</span>, x);    <span class="cm">// 7</span>
+
+<span class="k">int</span>* q = <span class="k">nullptr</span>;</pre><div class="buf"><span class="ch a">x: 42 → 7</span><span class="ch rest">адрес 0x7ffd…a4</span><span class="ch g">p: 0x7ffd…a4</span></div></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>запись</th><th>смысл</th></tr><tr><td class="cmd">int* p</td><td class="dsc">p — указатель на int</td></tr><tr><td class="cmd">&amp;x</td><td class="dsc">адрес x</td></tr><tr><td class="cmd">*p</td><td class="dsc">значение по адресу p</td></tr><tr><td class="cmd">nullptr</td><td class="dsc">ни на что не указывает</td></tr><tr><td class="cmd">sizeof(p)</td><td class="dsc">8 байт для любого типа</td></tr></table></div></div></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-sec="Указатели" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Указатели</span></div><h2>Что можно делать с указателями</h2>
+<div class="cols two"><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>можно</th><th>смысл</th></tr><tr><td class="cmd">p + n, p - n</td><td class="dsc">сдвиг на n <b>элементов</b>: для <code>int*</code> это 4n байт</td></tr><tr><td class="cmd">++p, --p, p += n</td><td class="dsc">то же, с изменением p</td></tr><tr><td class="cmd">q - p</td><td class="dsc">сколько элементов между ними</td></tr><tr><td class="cmd">p == q, p &lt; q</td><td class="dsc">сравнение адресов</td></tr><tr><td class="cmd">p[i]</td><td class="dsc">то же, что <code>*(p + i)</code></td></tr></table></div></div><div class="stack"><div class="panel pin"><h3>Нельзя</h3><ul><li><code>p + q</code></li><li><code>p * 2</code>, <code>p / 2</code></li><li>разыменовать <code>nullptr</code> или указатель за пределы массива</li></ul></div><pre class="code small"><span class="k">int</span>* r = p + q;</pre><pre class="code xsmall">error: invalid operands of types ‘<span class="k">int</span>*’ and ‘<span class="k">int</span>*’ to binary ‘operator+’</pre></div></div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstdio&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> a[<span class="num">4</span>] = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>, <span class="num">4</span>};
+    <span class="k">int</span>* p = a;
+    *p++ = <span class="num">10</span>;
+    ++*p;
+    <span class="k">std</span>::printf(<span class="s">"%d %d %d %d\n"</span>, a[<span class="num">0</span>], a[<span class="num">1</span>], a[<span class="num">2</span>], a[<span class="num">3</span>]);
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>10 2 3 4</span></div><div class="opt correct"><span class="n">2</span><span>10 3 3 4</span></div><div class="opt"><span class="n">3</span><span>11 2 3 4</span></div><div class="opt"><span class="n">4</span><span>1 10 3 4</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./ptrq</span>
+<span class="o">10 3 3 4</span></div><div class="why"><p><code>*p++ = 10</code> — это <code>*(p++) = 10</code>: записать в <code>a[0]</code>, потом сдвинуть p на <code>a[1]</code>.</p><p><code>++*p</code> — это <code>++(*p)</code>: <code>a[1]</code> стало 3.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-sec="Задача" data-time="6 мин" data-timer="240" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача</span></div><h2>Задача 2: swap через указатели</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">void</span> swap_values(<span class="k">int</span> a, <span class="k">int</span> b) {
+    <span class="k">int</span> tmp = a;
+    a = b;
+    b = tmp;
+}
+
+<span class="k">int</span> x = <span class="num">1</span>;
+<span class="k">int</span> y = <span class="num">2</span>;
+swap_values(x, y);
+<span class="k">std</span>::printf(<span class="s">"%d %d\n"</span>, x, y);</pre><div class="term small"><span class="p">$</span> <span class="c">./swap</span>
+<span class="o">1 2</span></div></div><div class="stack"><div class="panel pin"><h3>Что сделать</h3><p>В <code>tasks/t1_swap/swap.cpp</code> допишите <code>void swap_ints(int* a, int* b)</code>, чтобы программа печатала <code>2 1</code>.</p></div><div class="reveal" data-answer data-label="решение  →"><div class="answer"><pre class="code small"><span class="k">void</span> swap_ints(<span class="k">int</span>* a, <span class="k">int</span>* b) {
+    <span class="k">int</span> tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+swap_ints(&amp;x, &amp;y);   <span class="cm">// 2 1</span></pre><div class="why"><p>Аргументы передаются <b>по значению</b>: <code>swap_values</code> меняет копии. Чтобы менять чужие переменные, нужны их адреса.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-sec="printf и scanf" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">printf и scanf</span></div><h2>printf и scanf</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;cstdio&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> n = <span class="num">0</span>;
+    <span class="k">double</span> x = <span class="num">0</span>;
+    <span class="k">char</span> word[<span class="num">32</span>];
+    <span class="k">int</span> read = <span class="k">std</span>::scanf(<span class="s">"%d %lf %31s"</span>, &amp;n, &amp;x, word);
+    <span class="k">std</span>::printf(<span class="s">"read %d values: n=%d x=%.2f word=%s\n"</span>, read, n, x, word);
+    <span class="k">std</span>::printf(<span class="s">"[%5d] [%-5d] [%05d] [%x] [%c]\n"</span>, n, n, n, n, <span class="s">'A'</span>);
+}</pre><div class="term small"><span class="p">$</span> <span class="c">echo "42 3.14159 kitten" | ./printf_demo</span>
+<span class="o">read 3 values: n=42 x=3.14 word=kitten</span>
+<span class="o">[   42] [42   ] [00042] [2a] [A]</span></div></div><div class="stack"><div class="table-scroll"><table class="keys mini"><tr><th>формат</th><th>тип</th></tr><tr><td class="cmd">%d, %ld, %lld</td><td class="dsc">int, long, long long</td></tr><tr><td class="cmd">%u, %zu</td><td class="dsc">unsigned, size_t</td></tr><tr><td class="cmd">%f</td><td class="dsc">double в printf; в scanf — <code>%lf</code></td></tr><tr><td class="cmd">%c</td><td class="dsc">char</td></tr><tr><td class="cmd">%s</td><td class="dsc">char*: строка до <code>'\0'</code>; в scanf — до пробела</td></tr><tr><td class="cmd">%p</td><td class="dsc">адрес</td></tr><tr><td class="cmd">%x</td><td class="dsc">unsigned в шестнадцатеричном виде</td></tr></table></div><div class="panel pin"><h3>Что важно</h3><ul><li>scanf возвращает, сколько значений прочитал</li><li><code>%31s</code> — не больше 31 символа, чтобы не вылезти за массив из 32</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что произойдёт?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstdio&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = <span class="num">0</span>;
+    <span class="k">std</span>::scanf(<span class="s">"%d"</span>, x);
+    <span class="k">std</span>::printf(<span class="s">"%d\n"</span>, x);
+}</pre><div class="term small"><span class="p">$</span> <span class="c">echo 5 | ./scanf_bad</span></div></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>напечатает 5</span></div><div class="opt"><span class="n">2</span><span>напечатает 0</span></div><div class="opt"><span class="n">3</span><span>ошибка компиляции</span></div><div class="opt correct"><span class="n">4</span><span>программа упадёт</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><pre class="code xsmall">warning: format ‘%d’ expects argument of type ‘<span class="k">int</span>*’, but argument <span class="num">2</span> has type ‘<span class="k">int</span>’ [-Wformat=]</pre><div class="term small"><span class="p">$</span> <span class="c">echo 5 | ./scanf_bad</span>
+<span class="e">Segmentation fault</span></div><div class="why"><p>scanf должен <b>записать</b> число в переменную, поэтому ему нужен её адрес — как в swap. Здесь он получил 0 и попытался записать по адресу 0.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-sec="Массивы" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Массивы</span></div><h2>Массив в стиле Си</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> a[<span class="num">5</span>] = {<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>, <span class="num">40</span>, <span class="num">50</span>};
+<span class="k">int</span> b[<span class="num">5</span>] = {};              <span class="cm">// все нули</span>
+<span class="k">int</span> c[] = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>};        <span class="cm">// размер 3</span>
+
+<span class="k">std</span>::<span class="k">size_t</span> n = <span class="k">sizeof</span>(a) / <span class="k">sizeof</span>(a[<span class="num">0</span>]);   <span class="cm">// 5</span>
+
+<span class="cm">// b = a;                   // ошибка: массивы не присваиваются</span>
+<span class="cm">// a[5] = 0;                // за границей: никто не проверит</span></pre><div class="buf"><span class="ch a">10</span><span class="ch ">20</span><span class="ch ">30</span><span class="ch ">40</span><span class="ch ">50</span><span class="ch rest">?</span></div></div><div class="stack"><div class="panel pin"><h3>Как устроен</h3><ul><li>элементы лежат подряд</li><li>размер известен при компиляции и не меняется</li><li>имя массива почти везде превращается в указатель на первый элемент: <code>a</code> ≡ <code>&amp;a[0]</code></li><li><code>a[i]</code> ≡ <code>*(a + i)</code></li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;cstdio&gt;</span>
+
+<span class="k">void</span> print_size(<span class="k">int</span> a[<span class="num">10</span>]) {
+    <span class="k">std</span>::printf(<span class="s">"in function: %zu\n"</span>, <span class="k">sizeof</span>(a));
+}
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> a[<span class="num">10</span>] = {};
+    <span class="k">int</span>* p = a;
+    <span class="k">std</span>::printf(<span class="s">"array: %zu\n"</span>, <span class="k">sizeof</span>(a));
+    <span class="k">std</span>::printf(<span class="s">"pointer: %zu\n"</span>, <span class="k">sizeof</span>(p));
+    print_size(a);
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>40 8 40</span></div><div class="opt correct"><span class="n">2</span><span>40 8 8</span></div><div class="opt"><span class="n">3</span><span>10 8 10</span></div><div class="opt"><span class="n">4</span><span>40 40 40</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./sizes</span>
+<span class="o">array: 40</span>
+<span class="o">pointer: 8</span>
+<span class="o">in function: 8</span></div><div class="why"><p><code>void print_size(int a[10])</code> — то же самое, что <code>void print_size(int* a)</code>. В функцию приходит только адрес, размер теряется.</p><p>Поэтому размер передают отдельно: <code>f(int* a, std::size_t n)</code>.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 19 -->
+<section class="slide" data-sec="Массивы" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Массивы</span></div><h2>Массив и указатель</h2>
+<div class="table-scroll"><table class="keys"><tr><th></th><th><code>int a[10]</code></th><th><code>int* p = a</code></th></tr>
+<tr><td class="dsc">a[i], *(a + i)</td><td class="dsc">работает</td><td class="dsc">работает</td></tr>
+<tr><td class="dsc">sizeof</td><td class="cmd">40</td><td class="cmd">8</td></tr>
+<tr><td class="dsc">что хранит</td><td class="dsc">10 чисел</td><td class="dsc">адрес</td></tr>
+<tr><td class="dsc">присвоить, ++</td><td class="dsc">нельзя</td><td class="dsc">можно</td></tr>
+<tr><td class="dsc">&amp;</td><td class="dsc"><code>int(*)[10]</code> — указатель на весь массив</td><td class="dsc"><code>int**</code> — адрес переменной p</td></tr>
+<tr><td class="dsc">передать в функцию</td><td class="dsc">превращается в <code>int*</code></td><td class="dsc">копируется адрес</td></tr>
+</table></div>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="slide" data-sec="Массивы" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Массивы</span></div><h2>Отрицательный индекс</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstdio&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> a[<span class="num">5</span>] = {<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>, <span class="num">40</span>, <span class="num">50</span>};
+    <span class="k">int</span>* mid = a + <span class="num">2</span>;
+    <span class="k">std</span>::printf(<span class="s">"%d %d %d\n"</span>, mid[-<span class="num">2</span>], mid[<span class="num">0</span>], mid[<span class="num">2</span>]);
+    <span class="k">std</span>::printf(<span class="s">"%td\n"</span>, &amp;a[<span class="num">4</span>] - mid);
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./neg</span>
+<span class="o">10 30 50</span>
+<span class="o">2</span></div></div><div class="stack"><div class="buf"><span class="ch ">10</span><span class="ch ">20</span><span class="ch a">30</span><span class="ch ">40</span><span class="ch ">50</span></div><div class="panel pin"><h3>Почему работает</h3><p><code>mid[-2]</code> — это <code>*(mid - 2)</code>, то есть <code>a[0]</code>. Индекс — сдвиг от указателя, он может быть отрицательным, пока мы внутри массива.</p></div></div></div>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide" data-sec="Массивы" data-time="3 мин · можно пропустить" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Массивы</span></div><h2>VLA: массив размером из переменной</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> n = <span class="num">0</span>;
+<span class="k">std</span>::scanf(<span class="s">"%d"</span>, &amp;n);
+<span class="k">int</span> a[n];
+a[n - <span class="num">1</span>] = <span class="num">42</span>;</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall -pedantic vla.cpp -o vla</span>
+<span class="w">vla.cpp:6:9: warning: ISO C++ forbids variable length array ‘a’ [-Wvla]</span>
+<span class="p">$</span> <span class="c">echo 5 | ./vla</span>
+<span class="o">42</span>
+<span class="p">$</span> <span class="c">echo 100000000 | ./vla</span>
+<span class="e">Segmentation fault</span></div></div><div class="stack"><div class="panel pin"><h3>Почему так не надо</h3><ul><li><b>это не C++</b>: g++ и clang принимают VLA как расширение из Си</li><li>массив кладётся на стек, а стек маленький, около 8 МБ</li></ul></div><div class="panel"><h3>Что вместо</h3><p><code>std::vector&lt;int&gt; a(n);</code></p></div></div></div>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="slide" data-sec="Си-строки" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Си-строки</span></div><h2>Строка в Си — массив char с нулём в конце</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">char</span> s[] = <span class="s">"hello"</span>;          <span class="cm">// 6 байт: 5 букв + '\0'</span>
+<span class="k">const</span> <span class="k">char</span>* p = <span class="s">"hello"</span>;
+
+<span class="k">std</span>::printf(<span class="s">"%zu\n"</span>, <span class="k">sizeof</span>(s));        <span class="cm">// 6</span>
+<span class="k">std</span>::printf(<span class="s">"%zu\n"</span>, <span class="k">std</span>::strlen(s));   <span class="cm">// 5</span></pre><div class="buf"><span class="ch a">'h'</span><span class="ch a">'e'</span><span class="ch a">'l'</span><span class="ch a">'l'</span><span class="ch a">'o'</span><span class="ch nl">'\0'</span></div></div><div class="stack"><div class="panel pin"><h3>Нуль-терминированная строка</h3><ul><li>длина нигде не хранится — её находят, дойдя до <code>'\0'</code></li><li>функция получает только адрес первой буквы и идёт до нуля</li><li>нет <code>'\0'</code> — функции уйдут читать чужую память</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 23 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstdio&gt;</span>
+<span class="pp">#include &lt;cstring&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">char</span> s[<span class="num">10</span>] = <span class="s">"hi"</span>;
+    <span class="k">std</span>::printf(<span class="s">"%zu %zu\n"</span>, <span class="k">sizeof</span>(s), <span class="k">std</span>::strlen(s));
+    s[<span class="num">1</span>] = <span class="s">'\0'</span>;
+    <span class="k">std</span>::printf(<span class="s">"%zu %s\n"</span>, <span class="k">std</span>::strlen(s), s);
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>10 2, затем 1 h</span></div><div class="opt"><span class="n">2</span><span>3 2, затем 2 hi</span></div><div class="opt"><span class="n">3</span><span>10 10, затем 1 h</span></div><div class="opt"><span class="n">4</span><span>10 2, затем 2 h</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./strlen_q</span>
+<span class="o">10 2</span>
+<span class="o">1 h</span></div><div class="why"><p><code>sizeof</code> — размер массива, 10 байт. <code>strlen</code> — сколько символов до первого нуля.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 24 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что произойдёт?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstdio&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">char</span>* s = (<span class="k">char</span>*)<span class="s">"hello"</span>;
+    s[<span class="num">0</span>] = <span class="s">'j'</span>;
+    <span class="k">std</span>::printf(<span class="s">"%s\n"</span>, s);
+}</pre><span class="label">а так?</span><pre class="code small"><span class="k">char</span> s[] = <span class="s">"hello"</span>;
+s[<span class="num">0</span>] = <span class="s">'j'</span>;
+<span class="k">std</span>::printf(<span class="s">"%s\n"</span>, s);</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>напечатает jello</span></div><div class="opt"><span class="n">2</span><span>напечатает hello</span></div><div class="opt"><span class="n">3</span><span>ошибка компиляции</span></div><div class="opt correct"><span class="n">4</span><span>программа упадёт</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./literal</span>
+<span class="e">Segmentation fault</span>
+<span class="p">$</span> <span class="c">./literal3</span>
+<span class="o">jello</span></div><div class="why"><p>Строковый литерал лежит в памяти только для чтения. Запись туда — падение.</p><p><code>char s[] = "hello"</code> — свой массив, в который литерал <b>скопировали</b>. Его менять можно.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 25 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstdio&gt;</span>
+<span class="pp">#include &lt;cstring&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">char</span> a[] = <span class="s">"cat"</span>;
+    <span class="k">char</span> b[] = <span class="s">"cat"</span>;
+    <span class="k">std</span>::printf(<span class="s">"%d\n"</span>, a == b);
+    <span class="k">std</span>::printf(<span class="s">"%d\n"</span>, <span class="k">std</span>::strcmp(a, b) == <span class="num">0</span>);
+}</pre></div><div class="stack"><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./cmp</span>
+<span class="o">0</span>
+<span class="o">1</span></div><div class="why"><p><code>a == b</code> сравнивает <b>адреса</b>. Массивов два — адреса разные.</p><p>Содержимое сравнивает <code>strcmp</code>: 0, если строки равны.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 26 -->
+<section class="slide" data-sec="Си-строки" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Си-строки</span></div><h2>Функции из &lt;cstring&gt;</h2>
+<div class="table-scroll"><table class="keys"><tr><th>функция</th><th>что делает</th></tr>
+<tr><td class="cmd">strlen(s)</td><td class="dsc">длина до '\0'</td></tr>
+<tr><td class="cmd">strcpy(dst, src)</td><td class="dsc">копирует src в dst вместе с '\0'; место в dst не проверяет</td></tr>
+<tr><td class="cmd">strcmp(a, b)</td><td class="dsc">&lt; 0, если a раньше по алфавиту; 0, если равны; &gt; 0 иначе</td></tr>
+<tr><td class="cmd">strcat(dst, src)</td><td class="dsc">дописывает src в конец dst</td></tr>
+<tr><td class="cmd">strchr(s, c)</td><td class="dsc">указатель на первый символ c или nullptr</td></tr>
+<tr><td class="cmd">strstr(s, t)</td><td class="dsc">указатель на первое вхождение t или nullptr</td></tr>
+</table></div>
+  </div>
+</section>
+
+<!-- 27 -->
+<section class="slide" data-sec="Задача" data-time="14 мин" data-timer="720" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача</span></div><h2>Задача 3: напишите strlen, strcpy, strcmp</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">std</span>::<span class="k">size_t</span> my_strlen(<span class="k">const</span> <span class="k">char</span>* s);
+<span class="k">char</span>* my_strcpy(<span class="k">char</span>* dst, <span class="k">const</span> <span class="k">char</span>* src);
+<span class="k">int</span> my_strcmp(<span class="k">const</span> <span class="k">char</span>* a, <span class="k">const</span> <span class="k">char</span>* b);</pre><div class="panel pin"><h3>Что сделать</h3><ol class="steps"><li>файл <code>tasks/t2_strings/strings.cpp</code></li><li>напишите три функции, не используя <code>&lt;cstring&gt;</code></li><li><code>main</code> сравнит их со стандартными</li></ol></div><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall -Wextra strings.cpp -o strings &amp;&amp; ./strings</span>
+<span class="o">OK</span></div></div><div class="stack"><div class="reveal" data-label="бонус  →"><div class="panel"><h3>Бонус</h3><p><code>my_strcat(dst, src)</code> и <code>my_strchr(s, c)</code>.</p></div></div></div></div>
+  </div>
+</section>
+
+<!-- 28 -->
+<section class="slide" data-sec="Разбор" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Разбор</span></div><h2>Разбор</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="k">std</span>::<span class="k">size_t</span> my_strlen(<span class="k">const</span> <span class="k">char</span>* s) {
+    <span class="k">const</span> <span class="k">char</span>* p = s;
+    <span class="k">while</span> (*p != <span class="s">'\0'</span>) {
+        ++p;
+    }
+    <span class="k">return</span> p - s;
+}
+
+<span class="k">char</span>* my_strcpy(<span class="k">char</span>* dst, <span class="k">const</span> <span class="k">char</span>* src) {
+    <span class="k">char</span>* out = dst;
+    <span class="k">while</span> ((*dst++ = *src++) != <span class="s">'\0'</span>) {
+    }
+    <span class="k">return</span> out;
+}</pre></div><div class="stack"><pre class="code xsmall"><span class="k">int</span> my_strcmp(<span class="k">const</span> <span class="k">char</span>* a, <span class="k">const</span> <span class="k">char</span>* b) {
+    <span class="k">while</span> (*a != <span class="s">'\0'</span> &amp;&amp; *a == *b) {
+        ++a;
+        ++b;
+    }
+    <span class="k">return</span> <span class="k">static_cast</span>&lt;<span class="k">unsigned</span> <span class="k">char</span>&gt;(*a) -
+           <span class="k">static_cast</span>&lt;<span class="k">unsigned</span> <span class="k">char</span>&gt;(*b);
+}</pre></div></div>
+  </div>
+</section>
+
+<!-- 29 -->
+<section class="slide" data-sec="Си-строки" data-time="3 мин · можно пропустить" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Си-строки</span></div><h2>Строка в число: atoi, atof, strtol</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;cstdio&gt;</span>
+<span class="pp">#include &lt;cstdlib&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::printf(<span class="s">"%d %d %d %d\n"</span>, <span class="k">std</span>::atoi(<span class="s">"42"</span>), <span class="k">std</span>::atoi(<span class="s">"  -17abc"</span>),
+                <span class="k">std</span>::atoi(<span class="s">"abc"</span>), <span class="k">std</span>::atoi(<span class="s">"0"</span>));
+    <span class="k">std</span>::printf(<span class="s">"%g %g\n"</span>, <span class="k">std</span>::atof(<span class="s">"3.14"</span>), <span class="k">std</span>::atof(<span class="s">"1e3"</span>));
+    <span class="k">char</span>* end = <span class="k">nullptr</span>;
+    <span class="k">long</span> v = <span class="k">std</span>::strtol(<span class="s">"123xyz"</span>, &amp;end, <span class="num">10</span>);
+    <span class="k">std</span>::printf(<span class="s">"%ld \"%s\"\n"</span>, v, end);
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./atoi</span>
+<span class="o">42 -17 0 0</span>
+<span class="o">3.14 1000</span>
+<span class="o">123 "xyz"</span></div></div><div class="stack"><div class="panel pin"><h3>Что видно</h3><ul><li>atoi читает число, на первом лишнем символе останавливается</li><li>ошибку atoi не отличить от нуля: <code>"abc"</code> и <code>"0"</code> дают 0</li><li><code>strtol</code> через <code>end</code> сообщает, где кончилось число</li></ul></div><div class="reveal" data-label="реализация  →"><div class="panel"><h3>Свой my_atoi</h3><pre class="code xsmall"><span class="k">int</span> my_atoi(<span class="k">const</span> <span class="k">char</span>* s) {
+    <span class="k">while</span> (*s == <span class="s">' '</span>) {
+        ++s;
+    }
+    <span class="k">int</span> sign = <span class="num">1</span>;
+    <span class="k">if</span> (*s == <span class="s">'-'</span> || *s == <span class="s">'+'</span>) {
+        sign = (*s == <span class="s">'-'</span>) ? -<span class="num">1</span> : <span class="num">1</span>;
+        ++s;
+    }
+    <span class="k">int</span> result = <span class="num">0</span>;
+    <span class="k">while</span> (*s &gt;= <span class="s">'0'</span> &amp;&amp; *s &lt;= <span class="s">'9'</span>) {
+        result = result * <span class="num">10</span> + (*s - <span class="s">'0'</span>);
+        ++s;
+    }
+    <span class="k">return</span> sign * result;
+}</pre></div></div></div></div>
+  </div>
+</section>
+
+<!-- 30 -->
+<section class="slide" data-sec="memcpy и memmove" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">memcpy и memmove</span></div><h2>memcpy, memmove и strcpy</h2>
+<div class="cols two"><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>функция</th><th>сколько копирует</th><th>перекрытие</th></tr><tr><td class="cmd">strcpy(dst, src)</td><td class="dsc">до <code>'\0'</code> включительно</td><td class="dsc">нельзя</td></tr><tr><td class="cmd">memcpy(dst, src, n)</td><td class="dsc">ровно n байт</td><td class="dsc">нельзя</td></tr><tr><td class="cmd">memmove(dst, src, n)</td><td class="dsc">ровно n байт</td><td class="dsc"><b>можно</b></td></tr></table></div><pre class="code small"><span class="k">char</span> a[] = <span class="s">"abcdef"</span>;
+<span class="k">char</span> b[] = <span class="s">"abcdef"</span>;
+<span class="k">std</span>::memcpy(a + <span class="num">1</span>, a, <span class="num">4</span>);    <span class="cm">// области перекрываются</span>
+<span class="k">std</span>::memmove(b + <span class="num">1</span>, b, <span class="num">4</span>);   <span class="cm">// правильно</span></pre><div class="term small"><span class="p">$</span> <span class="c">g++ -fsanitize=address -fno-builtin overlap.cpp -o overlap &amp;&amp; ./overlap</span>
+<span class="e">ERROR: AddressSanitizer: memcpy-param-overlap: memory ranges</span>
+<span class="e">[0x…21,0x…25) and [0x…20, 0x…24) overlap</span></div></div><div class="stack"><div class="panel pin"><h3>Почему перекрытие ломает копирование</h3><p>Копирование слева направо в <code>a + 1</code> затирает ещё не скопированное:</p><div class="buf"><span class="ch ">a</span><span class="ch a">a</span><span class="ch a">a</span><span class="ch a">a</span><span class="ch a">a</span><span class="ch ">f</span></div><p><code>aaaaaf</code> вместо <code>aabcdf</code>. <code>memmove</code> в этом случае копирует справа налево.</p></div><div class="panel"><h3>Когда что</h3><ul><li>сдвиг внутри одного массива — <code>memmove</code></li><li>длина известна — <code>memcpy</code>, неизвестна — <code>strcpy</code></li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 31 -->
+<section class="slide" data-sec="Двумерные массивы" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Двумерные массивы</span></div><h2>Массив массивов, массив указателей, указатель на массив</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> m[<span class="num">3</span>][<span class="num">4</span>] = {};       <span class="cm">// 3 строки по 4 int подряд</span>
+<span class="k">int</span> (*row)[<span class="num">4</span>] = m;      <span class="cm">// указатель на массив из 4 int</span>
+<span class="k">int</span>* cells[<span class="num">3</span>];          <span class="cm">// массив из 3 указателей</span>
+
+<span class="k">const</span> <span class="k">char</span>* names[] = {<span class="s">"ann"</span>, <span class="s">"bob"</span>, <span class="s">"carl"</span>};</pre><div class="term small"><span class="cm">// sizeof(m)  sizeof(row)  sizeof(cells)</span>
+<span class="o">48 8 24</span>
+<span class="cm">// row + 1 сдвигается на целую строку, байт:</span>
+<span class="o">16</span></div></div><div class="stack"><div class="panel pin"><h3>Как читать объявления</h3><p>От имени вправо, пока можно, потом влево. Скобки меняют порядок.</p><ul><li><code>int* cells[3]</code>: массив из 3 элементов типа <code>int*</code></li><li><code>int (*row)[4]</code>: указатель на массив из 4 int</li><li><code>int m[3][4]</code>: массив из 3 элементов типа <code>int[4]</code></li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 32 -->
+<section class="slide" data-sec="Вопрос залу" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Какие объявления одинаковые?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">void</span> f(<span class="k">int</span>[<span class="num">5</span>][<span class="num">4</span>]);   <span class="cm">// 1</span>
+<span class="k">void</span> f(<span class="k">int</span>[<span class="num">4</span>]*);     <span class="cm">// 2</span>
+<span class="k">void</span> f(<span class="k">int</span>[<span class="num">5</span>]*);     <span class="cm">// 3</span>
+<span class="k">void</span> f(<span class="k">int</span>**);       <span class="cm">// 4</span>
+<span class="k">void</span> f(<span class="k">int</span>(*)[<span class="num">5</span>]);   <span class="cm">// 5</span>
+<span class="k">void</span> f(<span class="k">int</span>(*)[<span class="num">4</span>]);   <span class="cm">// 6</span></pre></div><div class="stack"><span class="ask">Какие из них одна и та же функция? Какие не скомпилируются?</span><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ -fsyntax-only sig.cpp      # строка 2</span>
+<span class="e">error: expected ‘,’ or ‘...’ before ‘*’ token</span></div><div class="why"><p><b>2 и 3 — не C++.</b> Указатель на массив пишется только как <code>int(*)[4]</code>.</p><p><b>1 и 6 — одна функция.</b> <code>int[5][4]</code> превращается в указатель на первую строку <code>int(*)[4]</code>, число 5 теряется.</p><p><b>4 и 5 — другие функции.</b></p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 33 -->
+<section class="slide" data-sec="Двумерные массивы" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Двумерные массивы</span></div><h2>Почему int** не подходит для двумерного массива</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">void</span> g(<span class="k">int</span>** p) {}
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> m[<span class="num">5</span>][<span class="num">4</span>] = {};
+    g(m);
+}</pre><pre class="code xsmall">error: cannot convert ‘<span class="k">int</span> (*)[<span class="num">4</span>]’ to ‘<span class="k">int</span>**’</pre><pre class="code xsmall"><span class="k">void</span> print(<span class="k">int</span> m[][<span class="num">4</span>], <span class="k">int</span> rows) {
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">0</span>; i &lt; rows; ++i) {
+        <span class="k">for</span> (<span class="k">int</span> j = <span class="num">0</span>; j &lt; <span class="num">4</span>; ++j) {
+            <span class="k">std</span>::printf(<span class="s">"%d "</span>, m[i][j]);
+        }
+        <span class="k">std</span>::printf(<span class="s">"\n"</span>);
+    }
+}</pre></div><div class="stack"><div class="panel pin"><h3>В памяти они разные</h3><ul><li><code>int m[5][4]</code> — 20 чисел подряд, указателей внутри нет</li><li><code>int**</code> ожидает, что в памяти лежат <b>адреса</b> строк</li><li>чтобы найти <code>m[i][j]</code>, нужна длина строки, поэтому 4 обязательна в типе</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 34 -->
+<section class="slide" data-sec="argv" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">argv</span></div><h2>Аргументы командной строки</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstdio&gt;</span>
+
+<span class="k">int</span> main(<span class="k">int</span> argc, <span class="k">char</span>* argv[]) {
+    <span class="k">std</span>::printf(<span class="s">"argc = %d\n"</span>, argc);
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">0</span>; i &lt; argc; ++i) {
+        <span class="k">std</span>::printf(<span class="s">"argv[%d] = \"%s\"\n"</span>, i, argv[i]);
+    }
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./args hello "big world" 42</span>
+<span class="o">argc = 4</span>
+<span class="o">argv[0] = "./args"</span>
+<span class="o">argv[1] = "hello"</span>
+<span class="o">argv[2] = "big world"</span>
+<span class="o">argv[3] = "42"</span></div></div><div class="stack"><div class="panel pin"><h3>Что приходит в main</h3><ul><li><code>argc</code> — сколько аргументов, включая имя программы</li><li><code>argv</code> — массив Си-строк; <code>char* argv[]</code> ≡ <code>char** argv</code></li><li><code>argv[argc]</code> всегда <code>nullptr</code></li><li>числа приходят строками: <code>"42"</code></li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 35 -->
+<section class="slide" data-sec="Задача" data-time="9 мин" data-timer="480" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача</span></div><h2>Задача 4: свой echo и аргументы задом наперёд</h2>
+<div class="cols two"><div class="stack"><div class="panel pin"><h3>my_echo</h3><p>Напечатать аргументы через пробел. <code>tasks/t3_args/my_echo.cpp</code></p><div class="term small"><span class="p">$</span> <span class="c">./my_echo one two three</span>
+<span class="o">one two three</span></div></div><div class="panel"><h3>reverse</h3><p>Напечатать аргументы в обратном порядке, по одному на строке. <code>tasks/t3_args/reverse.cpp</code></p><div class="term small"><span class="p">$</span> <span class="c">./reverse one two three</span>
+<span class="o">three</span>
+<span class="o">two</span>
+<span class="o">one</span></div></div></div><div class="stack"><div class="reveal" data-label="бонус  →"><div class="panel"><h3>sum_args</h3><p>Сложить числа-аргументы. Без аргументов — напечатать подсказку в <code>stderr</code> и вернуть 1. <code>tasks/t3_args/sum_args.cpp</code></p><div class="term small"><span class="p">$</span> <span class="c">./sum_args 1 2 39</span>
+<span class="o">42</span>
+<span class="p">$</span> <span class="c">./sum_args</span>
+<span class="o">usage: ./sum_args NUMBER...</span>
+<span class="p">$</span> <span class="c">echo $?</span>
+<span class="o">1</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 36 -->
+<section class="slide" data-sec="Код возврата" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Код возврата</span></div><h2>Что возвращает main</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> main(<span class="k">int</span> argc, <span class="k">char</span>* argv[]) {
+    <span class="k">if</span> (argc &lt; <span class="num">2</span>) {
+        <span class="k">std</span>::fprintf(stderr, <span class="s">"usage: %s NUMBER...\n"</span>, argv[<span class="num">0</span>]);
+        <span class="k">return</span> <span class="num">1</span>;
+    }
+    <span class="cm">// ...</span>
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">ls /nonexistent</span>
+<span class="o">ls: cannot access '/nonexistent': No such file or directory</span>
+<span class="p">$</span> <span class="c">echo $?</span>
+<span class="o">2</span>
+<span class="p">$</span> <span class="c">./sum_args 1 2 39 &amp;&amp; echo ok || echo fail</span>
+<span class="o">42</span>
+<span class="o">ok</span>
+<span class="p">$</span> <span class="c">./sum_args &amp;&amp; echo ok || echo fail</span>
+<span class="o">usage: ./sum_args NUMBER...</span>
+<span class="o">fail</span></div></div><div class="stack"><div class="panel pin"><h3>Код возврата</h3><ul><li><code>0</code> — успех, остальное — ошибка</li><li><code>echo $?</code> — код последней команды</li><li><code>&amp;&amp;</code> выполнит следующую команду только при успехе, <code>||</code> — только при ошибке</li><li>segfault — код 139</li></ul></div></div></div>
+  </div>
+</section>
+
+<!-- 37 -->
+<section class="slide" data-sec="Итог" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Итог</span></div><h2>Что унести с пары</h2>
+<div class="cols three"><div class="panel"><h3>Компилятор</h3><ul><li>godbolt.org — ассемблер любой версии любого компилятора</li><li>аргументы в <code>%edi</code>, <code>%esi</code>, результат в <code>%eax</code></li><li><code>nm</code>: <code>U</code> — нужна, <code>T</code> — есть</li></ul></div><div class="panel pin"><h3>Указатели и массивы</h3><ul><li><code>a[i]</code> ≡ <code>*(a + i)</code></li><li>в функцию массив приходит как указатель</li><li>двумерный массив — не <code>int**</code></li><li>менять чужую переменную — через адрес</li></ul></div><div class="panel"><h3>Си-строки</h3><ul><li>строка кончается на <code>'\0'</code></li><li>литерал менять нельзя</li><li>сравнивать — <code>strcmp</code>, не <code>==</code></li><li>перекрытие — <code>memmove</code></li><li><code>argv</code> — массив Си-строк</li></ul></div></div>
+  </div>
+</section>
+
+<!-- 38 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Разбор задачи 4</h2>
+<div class="cols three"><div class="stack"><span class="label">my_echo.cpp</span><pre class="code xsmall"><span class="k">int</span> main(<span class="k">int</span> argc, <span class="k">char</span>* argv[]) {
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">1</span>; i &lt; argc; ++i) {
+        <span class="k">std</span>::printf(<span class="s">"%s"</span>, argv[i]);
+        <span class="k">if</span> (i + <span class="num">1</span> &lt; argc) {
+            <span class="k">std</span>::printf(<span class="s">" "</span>);
+        }
+    }
+    <span class="k">std</span>::printf(<span class="s">"\n"</span>);
+}</pre></div><div class="stack"><span class="label">reverse.cpp</span><pre class="code xsmall"><span class="k">int</span> main(<span class="k">int</span> argc, <span class="k">char</span>* argv[]) {
+    <span class="k">for</span> (<span class="k">int</span> i = argc - <span class="num">1</span>; i &gt;= <span class="num">1</span>; --i) {
+        <span class="k">std</span>::printf(<span class="s">"%s\n"</span>, argv[i]);
+    }
+}</pre></div><div class="stack"><span class="label">sum_args.cpp</span><pre class="code xsmall"><span class="k">int</span> main(<span class="k">int</span> argc, <span class="k">char</span>* argv[]) {
+    <span class="k">if</span> (argc &lt; <span class="num">2</span>) {
+        <span class="k">std</span>::fprintf(stderr, <span class="s">"usage: %s NUMBER...\n"</span>, argv[<span class="num">0</span>]);
+        <span class="k">return</span> <span class="num">1</span>;
+    }
+    <span class="k">int</span> total = <span class="num">0</span>;
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">1</span>; i &lt; argc; ++i) {
+        total += <span class="k">std</span>::atoi(argv[i]);
+    }
+    <span class="k">std</span>::printf(<span class="s">"%d\n"</span>, total);
+    <span class="k">return</span> <span class="num">0</span>;
+}</pre></div></div>
+  </div>
+</section>
+
+<!-- 39 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Ещё задачи</h2>
+<div class="tasklist"><div class="panel"><h3>my_strcat и my_strchr <span class="lvl l1">просто</span></h3><p>Допишите в <code>strings.cpp</code> и проверьте против стандартных.</p></div><div class="panel"><h3>Палиндромы <span class="lvl l1">просто</span></h3><p>Для каждого аргумента напечатать <code>yes</code> или <code>no</code>: читается ли он одинаково с обеих сторон.</p></div><div class="panel"><h3>Сортировка аргументов <span class="lvl l2">средне</span></h3><p>Напечатать аргументы по алфавиту. Меняйте местами указатели в <code>argv</code>, сравнение — <code>strcmp</code>.</p></div><div class="panel"><h3>Свой memmove <span class="lvl l2">средне</span></h3><p><code>void* my_memmove(void* dst, const void* src, std::size_t n)</code></p></div><div class="panel"><h3>Транспонирование <span class="lvl l3">сложно</span></h3><p><code>void transpose(int m[][4], int out[][3])</code> для матрицы 3×4.</p></div><div class="panel"><h3>my_strlen на godbolt <span class="lvl l3">сложно</span></h3><p>Что делают с <code>my_strlen</code> <code>-O2</code>, <code>-O3</code> и clang?</p></div></div>
+  </div>
+</section>
+
+</div>
+
+<div id="notes" hidden><h4>Заметки семинаристу<span id="notes-time"></span></h4><ul id="notes-body"></ul></div>
+
+<div class="bar">
+  <button id="prev" aria-label="Предыдущий слайд">←</button>
+  <button id="next" aria-label="Дальше">→</button>
+  <span class="counter"><b id="cur">1</b> / <span id="total">39</span></span>
+  <button id="timer" hidden>таймер 0:00</button>
+  <span class="spacer"></span>
+  <span class="counter" id="secname"></span>
+  <span class="keys-hint">→ дальше и ответы · T таймер · D тема</span>
+  
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var notes = document.getElementById('notes');
+  var notesBody = document.getElementById('notes-body');
+  var notesOpen = false;
+
+  var timerBtn = document.getElementById('timer');
+  var tLeft = 0, tOwner = -1, tRunning = false, tHandle = null;
+
+  function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  function drawTimer() {
+    if (timerBtn.classList.contains('done')) { timerBtn.textContent = 'время вышло'; return; }
+    timerBtn.textContent = (tRunning ? 'идёт ' : 'таймер ') + fmt(tLeft);
+  }
+  function stopTimer() { tRunning = false; clearInterval(tHandle); timerBtn.classList.remove('running'); }
+  function toggleTimer() {
+    if (timerBtn.hidden) return;
+    if (timerBtn.classList.contains('done')) {
+      timerBtn.classList.remove('done');
+      tLeft = +(slides[tOwner] && slides[tOwner].dataset.timer || 0);
+      drawTimer(); return;
+    }
+    if (tRunning) { stopTimer(); drawTimer(); return; }
+    if (tLeft <= 0) return;
+    tRunning = true; timerBtn.classList.add('running');
+    tHandle = setInterval(function () {
+      tLeft -= 1;
+      if (tLeft <= 0) { tLeft = 0; stopTimer(); timerBtn.classList.add('done'); }
+      drawTimer();
+    }, 1000);
+    drawTimer();
+  }
+
+  document.getElementById('total').textContent = slides.length;
+
+  function render() {
+    slides.forEach(function (s, n) { s.classList.toggle('is-active', n === i); });
+    var s = slides[i];
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('progress').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('secname').textContent = s.dataset.sec || '';
+    notesBody.innerHTML = s.dataset.notes || '<li>—</li>';
+    var t = s.dataset.time || '';
+    document.getElementById('notes-time').textContent = t ? '  ·  ' + t : '';
+
+    var dur = +(s.dataset.timer || 0);
+    if (dur && !tRunning && tOwner !== i) {
+      tLeft = dur; tOwner = i; timerBtn.classList.remove('done');
+    }
+    timerBtn.hidden = !(dur || tRunning);
+    drawTimer();
+
+    window.scrollTo(0, 0);
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+  }
+
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  function show(r) {
+    r.classList.add('shown');
+    if (r.hasAttribute('data-answer')) {
+      var sl = r.closest('.slide');
+      if (sl) sl.classList.add('answered');
+    }
+  }
+  function revealNext() {
+    var r = slides[i].querySelector('.reveal:not(.shown)');
+    if (r) { show(r); return true; }
+    return false;
+  }
+  function next() { if (!revealNext()) go(i + 1); }
+
+  function toggleNotes() {
+    notesOpen = !notesOpen;
+    notes.hidden = !notesOpen;
+    document.getElementById('notes-btn').classList.toggle('on', notesOpen);
+  }
+  function toggleTheme() {
+    var root = document.documentElement;
+    var cur = root.getAttribute('data-theme');
+    if (!cur) cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.reveal'), function (r) {
+    r.setAttribute('tabindex', '0');
+    r.setAttribute('role', 'button');
+    r.addEventListener('click', function () { if (!r.classList.contains('shown')) show(r); });
+    r.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter') && !r.classList.contains('shown')) { e.preventDefault(); e.stopPropagation(); show(r); }
+    });
+  });
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', function () { go(i - 1); });
+  
+  timerBtn.addEventListener('click', toggleTimer);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); next(); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (k === 'Home') { e.preventDefault(); go(0); }
+    else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
+    
+    else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); toggleTimer(); }
+    else if (k === 'r' || k === 'R' || k === 'к' || k === 'К') {
+      e.preventDefault();
+      Array.prototype.forEach.call(slides[i].querySelectorAll('.reveal:not(.shown)'), show);
+    }
+    else if (k === 'd' || k === 'D' || k === 'в' || k === 'В') { e.preventDefault(); toggleTheme(); }
+    else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') {
+      e.preventDefault();
+      if (document.fullscreenElement) { document.exitFullscreen(); }
+      else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
+    }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) { i = Math.max(0, Math.min(slides.length - 1, parseInt(m[1], 10) - 1)); }
+  render();
+})();
+</script>
+
+</body>
+</html>

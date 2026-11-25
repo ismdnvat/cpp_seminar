@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;font:14px/1.5 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Стартовый набор C++</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+:root {
+  --paper:#FAF8FC; --paper-2:#F1EDF6; --rail:#E4DCEE; --ink:#1B1524;
+  --ink-soft:#57496B; --ink-faint:#8A7CA0; --accent:#B01490; --accent-dim:#F6E4F3;
+  --note:#0B6F7C; --err:#C42430; --ok:#12704F;
+  --term-bg:#211A2C; --term-fg:#EDE6F4; --term-dim:#A493B8;
+  --shadow: 0 1px 2px rgba(27,21,36,.06), 0 12px 32px -18px rgba(27,21,36,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#150F1D; --paper-2:#1E1729; --rail:#322646; --ink:#F2ECF8;
+    --ink-soft:#B5A6C8; --ink-faint:#7E6E94; --accent:#F175D2; --accent-dim:#2C1B31;
+    --note:#52CFDA; --err:#FF7A80; --ok:#4FD9A7;
+    --term-bg:#0D0913; --term-fg:#EDE6F4; --term-dim:#9585AA;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#150F1D; --paper-2:#1E1729; --rail:#322646; --ink:#F2ECF8;
+  --ink-soft:#B5A6C8; --ink-faint:#7E6E94; --accent:#F175D2; --accent-dim:#2C1B31;
+  --note:#52CFDA; --err:#FF7A80; --ok:#4FD9A7;
+  --term-bg:#0D0913; --term-fg:#EDE6F4; --term-dim:#9585AA;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(15px, 1.35vw, 19px); line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800; margin: 0; letter-spacing: -.02em; line-height: 1.06; text-wrap: balance;
+}
+code, kbd, pre { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.progress { position: fixed; inset: 0 auto auto 0; height: 3px; width: 0; background: var(--accent); z-index: 40; transition: width .25s ease; }
+.deck { min-height: 100svh; display: flex; flex-direction: column; }
+.slide {
+  display: none; flex: 1; min-height: 100svh;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1.1rem, 5vw, 5rem) clamp(4.5rem, 8vh, 6rem);
+  flex-direction: column; justify-content: center; gap: clamp(1rem, 2.2vh, 1.9rem);
+}
+.slide.is-active { display: flex; }
+.wrap { width: 100%; max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: clamp(.9rem, 2vh, 1.7rem); }
+
+.eyebrow { font-family: "JetBrains Mono", monospace; font-size: .72em; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+h2 { font-size: clamp(1.8rem, 4.2vw, 3.2rem); }
+.sub { color: var(--ink-soft); max-width: 64ch; font-size: 1.06em; }
+.hint { color: var(--ink-faint); font-size: .92em; }
+p { margin: 0; }
+strong { font-weight: 600; }
+
+.term, pre.code {
+  border-radius: 10px; overflow-x: auto; line-height: 1.65; margin: 0;
+  padding: clamp(.9rem, 1.8vw, 1.4rem) clamp(1rem, 2vw, 1.5rem);
+  font-family: "JetBrains Mono", monospace; font-size: clamp(.78rem, 1.15vw, 1.02rem);
+  white-space: pre; tab-size: 4;
+}
+.term { background: var(--term-bg); color: var(--term-fg); box-shadow: var(--shadow); }
+.term .p { color: #4FD9A7; font-weight: 700; }
+.term .c { color: var(--term-fg); font-weight: 700; }
+.term .o { color: var(--term-dim); }
+.term .e { color: #FF7A80; font-weight: 700; }
+.term .n { color: #52CFDA; }
+.term .cm { color: var(--term-dim); font-style: italic; }
+pre.code { background: var(--paper-2); border: 1px solid var(--rail); }
+pre.code .k { color: var(--accent); font-weight: 700; }
+pre.code .s { color: var(--ok); }
+pre.code .pp { color: var(--note); }
+
+.cols { display: grid; gap: clamp(.8rem, 1.6vw, 1.4rem); }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.cols.three { grid-template-columns: repeat(auto-fit, minmax(275px, 1fr)); }
+
+.panel { background: var(--paper-2); border: 1px solid var(--rail); border-radius: 12px; padding: clamp(.9rem, 1.7vw, 1.3rem); display: flex; flex-direction: column; gap: .55rem; }
+.panel h3 { font-size: 1.12em; }
+.panel p { color: var(--ink-soft); font-size: .95em; }
+.panel ul, .panel ol { margin: 0; padding-left: 1.15em; color: var(--ink-soft); font-size: .95em; }
+.panel li + li { margin-top: .3em; }
+.panel .term { font-size: clamp(.72rem, 1vw, .88rem); box-shadow: none; }
+.pin { background: var(--accent-dim); border-color: transparent; }
+.pin h3 { color: var(--accent); }
+.pin p, .pin ul, .pin ol { color: var(--ink); }
+
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: clamp(.82rem, 1.15vw, 1rem); }
+th, td { text-align: left; padding: .45em .9em .45em 0; border-bottom: 1px solid var(--rail); vertical-align: baseline; }
+th { font-size: .78em; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-faint); font-weight: 600; }
+td.cmd { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+td.msg { font-family: "JetBrains Mono", monospace; color: var(--err); font-size: .92em; }
+td.dsc { color: var(--ink-soft); }
+
+/* карточки-ссылки */
+.links { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: clamp(.7rem, 1.5vw, 1.1rem); }
+.linkcard { display: flex; flex-direction: column; gap: .25rem; text-decoration: none; border: 1px solid var(--rail); border-radius: 12px; padding: clamp(.9rem, 1.7vw, 1.25rem); background: var(--paper-2); color: var(--ink); }
+a.linkcard:hover { border-color: var(--accent); }
+.linkcard .lbl { font-weight: 600; font-size: 1.05em; }
+.linkcard .val { font-family: "JetBrains Mono", monospace; font-size: .82em; color: var(--accent); word-break: break-all; }
+.linkcard.todo { border-style: dashed; background: transparent; }
+.linkcard.todo .val { color: var(--ink-faint); }
+
+/* QR: всегда тёмное на белом — иначе камера не читает */
+.qrs { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: clamp(1.2rem, 3vw, 2.6rem); justify-items: center; }
+.qrcard { display: flex; flex-direction: column; align-items: center; gap: clamp(.6rem, 1.4vh, 1rem); max-width: 340px; width: 100%; }
+.qr-img {
+  width: 100%; aspect-ratio: 1; background: #fff; border-radius: 14px;
+  padding: clamp(8px, 1.2vw, 14px); box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center;
+}
+.qr-img svg { width: 100%; height: 100%; display: block; }
+.qr-img:empty::after {
+  content: "QR не загрузился — откройте ссылку ниже";
+  color: #57496B; font-size: .8rem; text-align: center; padding: 1rem;
+  font-family: "Source Sans 3", sans-serif;
+}
+.qr-meta { display: flex; flex-direction: column; align-items: center; gap: .15rem; text-align: center; }
+.qr-lbl { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: clamp(1.05rem, 2vw, 1.55rem); letter-spacing: -.02em; }
+.qr-url { font-family: "JetBrains Mono", monospace; font-size: .8em; color: var(--accent); text-decoration: none; word-break: break-all; }
+.qr-url:hover { text-decoration: underline; }
+
+/* ── конвейер сборки: настоящая последовательность, порядок обязателен ── */
+.pipe { display: flex; align-items: stretch; gap: .3rem; overflow-x: auto; padding-bottom: .4rem; }
+.node {
+  flex: 0 0 auto; min-width: 132px; display: flex; flex-direction: column; gap: .1rem;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: clamp(.55rem, 1.1vw, .85rem) clamp(.6rem, 1.2vw, 1rem);
+}
+.node .fn { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: clamp(.82rem, 1.2vw, 1.02rem); }
+.node .fd { font-size: .76em; color: var(--ink-faint); line-height: 1.35; }
+.node.done { background: var(--accent-dim); border-color: transparent; }
+.node.done .fn { color: var(--accent); }
+.node.done .fd { color: var(--ink-soft); }
+.step {
+  flex: 0 0 auto; min-width: 104px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .05rem; padding: 0 .25rem;
+}
+.step .tool { font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-align: center; }
+.step .glyph { color: var(--ink-faint); font-size: 1.15em; line-height: 1; }
+.step .flag { font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); }
+
+/* домашка: один простой нумерованный список */
+ol.hw {
+  margin: 0; padding-left: 1.7em; display: flex; flex-direction: column;
+  gap: clamp(.4rem, 1.1vh, .75rem); max-width: 70ch;
+  font-size: clamp(1rem, 1.65vw, 1.3rem); line-height: 1.45;
+}
+ol.hw li::marker { color: var(--accent); font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: .8em; }
+ul.plain { margin: 0; padding-left: 1.2em; color: var(--ink-soft); }
+ul.plain li + li { margin-top: .35em; }
+
+kbd { border: 1px solid var(--rail); border-bottom-width: 2px; border-radius: 5px; padding: .05em .4em; font-size: .85em; color: var(--ink-soft); }
+.hero-num { font-family: "JetBrains Mono", monospace; color: var(--accent); font-weight: 700; letter-spacing: .2em; text-transform: uppercase; font-size: .82em; }
+h1 { font-size: clamp(2.4rem, 7vw, 5.2rem); }
+.hero-line { height: 2px; background: var(--accent); width: 84px; }
+
+.bar {
+  position: fixed; inset: auto 0 0 0; z-index: 30; display: flex; align-items: center; gap: .75rem;
+  padding: .5rem clamp(.7rem, 3vw, 1.6rem);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--rail);
+  font-family: "JetBrains Mono", monospace; font-size: .78rem;
+}
+.bar .spacer { flex: 1; }
+button { font-family: "JetBrains Mono", monospace; font-size: .78rem; cursor: pointer; background: transparent; color: var(--ink-soft); border: 1px solid var(--rail); border-radius: 7px; padding: .3em .7em; }
+button:hover { color: var(--accent); border-color: var(--accent); }
+.counter { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.counter b { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section class="slide is-active" data-sec="Стартовый набор">
+  <div class="wrap">
+    <div class="hero-num">C++ · 1 курс · семинар 01</div>
+    <h1>Стартовый набор</h1>
+    <div class="hero-line"></div>
+    <p class="sub" style="font-size:1.15em">Всё, что нужно, чтобы у вас на компьютере собиралась и запускалась программа на C++. Эти слайды будут у вас — откройте их ещё раз дома, когда сядете за домашнее задание.</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-sec="Связь">
+  <div class="wrap">
+    <div class="eyebrow">Связь</div>
+    <h2>Куда писать</h2>
+    <div class="qrs">
+      <div class="qrcard">
+        <div class="qr-img" data-url="https://t.me/+WgCQkZ02IrI5YzZi"></div>
+        <div class="qr-meta">
+          <span class="qr-lbl">Общий чат курса</span>
+          <a class="qr-url" href="https://t.me/+WgCQkZ02IrI5YzZi" target="_blank" rel="noopener">t.me/+WgCQkZ02IrI5YzZi</a>
+        </div>
+      </div>
+      <div class="qrcard">
+        <div class="qr-img" data-url="https://t.me/+McA3TFDpXCZmNWJi"></div>
+        <div class="qr-meta">
+          <span class="qr-lbl">Чат семинарской группы</span>
+          <a class="qr-url" href="https://t.me/+McA3TFDpXCZmNWJi" target="_blank" rel="noopener">t.me/+McA3TFDpXCZmNWJi</a>
+        </div>
+      </div>
+    </div>
+    <p class="hint">Наведите камеру телефона на код. Застряли на установке или на ошибке компилятора — пишите в чат группы. Прикладывайте скриншот терминала целиком: и команду, и вывод.</p>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-sec="Переезд">
+  <div class="wrap">
+    <div class="eyebrow">Переезд</div>
+    <h2>Переезжаем на Linux или macOS</h2>
+    <p class="sub">Весь курс идёт в Unix-подобной системе. К следующему занятию нужна система, где работают терминал и компилятор: на Windows мы не остаёмся.</p>
+    <div class="cols two">
+      <div class="panel">
+        <h3>Уже есть macOS</h3>
+        <p>Переезжать некуда, нужны только инструменты разработчика.</p>
+        <div class="term"><span class="p">$</span> <span class="c">xcode-select --install</span>
+<span class="p">$</span> <span class="c">clang++ --version</span></div>
+        <p>Согласиться в появившемся окне и подождать. <code>g++</code> на маке — обычно тот же clang под другим именем.</p>
+      </div>
+      <div class="panel pin">
+        <h3>Ставим Linux</h3>
+        <p>Проще всего начать с Ubuntu: скачать образ с ubuntu.com, записать на флешку и поставить — второй системой рядом с Windows или основной.</p>
+        <div class="term"><span class="p">$</span> <span class="c">sudo apt update</span>
+<span class="p">$</span> <span class="c">sudo apt install build-essential gdb</span></div>
+        <p>Заложите на это вечер и <strong>обязательно сохраните важные файлы</strong> перед тем, как трогать разметку диска.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-sec="Проверка">
+  <div class="wrap">
+    <div class="eyebrow">Проверка</div>
+    <h2>Как понять, что всё получилось</h2>
+    <div class="term"><span class="p">$</span> <span class="c">g++ --version</span>
+<span class="o">g++ (Ubuntu 13.3.0) 13.3.0</span>     <span class="cm"># версия может отличаться — это нормально</span></div>
+    <div class="cols two">
+      <div class="panel pin">
+        <h3>Команда ответила</h3>
+        <p>Компилятор на месте, вы готовы к следующему занятию.</p>
+      </div>
+      <div class="panel">
+        <h3><code>command not found</code></h3>
+        <p>Компилятор не встал. Вернитесь на слайд назад и пройдите шаги ещё раз. Не получается — пишите в чат группы.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-sec="Запуск">
+  <div class="wrap">
+    <div class="eyebrow">Запуск</div>
+    <h2>Собрать и запустить</h2>
+    <p class="sub">Файл с программой вы написали в редакторе — дальше всего две команды.</p>
+    <div class="term"><span class="p">$</span> <span class="c">g++ hello.cpp -o hello</span>
+<span class="p">$</span> <span class="c">./hello</span>
+<span class="o">Привет, первый курс!</span></div>
+    <div class="cols three">
+      <div class="panel">
+        <h3>Два разных файла</h3>
+        <p><code>hello.cpp</code> — текст, который читаете вы. <code>hello</code> — программа, которую выполняет процессор.</p>
+      </div>
+      <div class="panel">
+        <h3>Поправили — пересоберите</h3>
+        <p>Изменения в исходнике не попадут в программу сами. Без повторной сборки запустится старая версия.</p>
+      </div>
+      <div class="panel pin">
+        <h3>Откуда <code>./</code></h3>
+        <p>Значит «программа лежит вот здесь, в текущей папке». Без этого оболочка ищет команду только в системных папках и не находит.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-sec="Сборка">
+  <div class="wrap">
+    <div class="eyebrow">Сборка</div>
+    <h2>Строка сборки</h2>
+    <div class="term"><span class="p">$</span> <span class="c">g++ -std=c++20 -Wall -Wextra -g hello.cpp -o hello</span></div>
+    <div class="cols two">
+      <div class="table-scroll">
+        <table>
+          <tr><th>Флаг</th><th>Зачем</th></tr>
+          <tr><td class="cmd">-std=c++20</td><td class="dsc">версия языка, по которой собираем</td></tr>
+          <tr><td class="cmd">-Wall -Wextra</td><td class="dsc">предупреждения: компилятор находит ваши ошибки ещё до запуска</td></tr>
+          <tr><td class="cmd">-g</td><td class="dsc">отладочная информация, понадобится для отладчика</td></tr>
+          <tr><td class="cmd">-o hello</td><td class="dsc">как назвать результат; без флага получится <code>a.out</code></td></tr>
+        </table>
+      </div>
+      <div class="panel pin">
+        <h3>Версия компилятора ≠ версия языка</h3>
+        <p><code>g++ 13.3.0</code> — это версия программы. <code>C++20</code> — версия языка, её задаёт флаг <code>-std</code>. Один и тот же компилятор умеет собирать по разным стандартам.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-sec="Конвейер сборки">
+  <div class="wrap">
+    <div class="eyebrow">Конвейер сборки</div>
+    <h2>Как из текста получается программа</h2>
+    <p class="sub">Одна команда <code>g++ hello.cpp -o hello</code> на самом деле запускает четыре программы по очереди. Каждая берёт файл и отдаёт следующий.</p>
+    <div class="pipe">
+      <div class="node"><span class="fn">hello.cpp</span><span class="fd">83 байта, 5 строк</span></div>
+      <div class="step"><span class="tool">препроцессор</span><span class="glyph">&#8594;</span><span class="flag">-E</span></div>
+      <div class="node"><span class="fn">hello.i</span><span class="fd">886 КБ, 36 587 строк</span></div>
+      <div class="step"><span class="tool">компилятор</span><span class="glyph">&#8594;</span><span class="flag">-S</span></div>
+      <div class="node"><span class="fn">hello.s</span><span class="fd">67 строк ассемблера</span></div>
+      <div class="step"><span class="tool">ассемблер</span><span class="glyph">&#8594;</span><span class="flag">-c</span></div>
+      <div class="node"><span class="fn">hello.o</span><span class="fd">машинный код с дырами</span></div>
+      <div class="step"><span class="tool">линковщик</span><span class="glyph">&#8594;</span><span class="flag">&nbsp;</span></div>
+      <div class="node done"><span class="fn">hello</span><span class="fd">16 КБ, запускается</span></div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <tr><th>Стадия</th><th>Что делает</th><th>Что здесь ломается</th></tr>
+        <tr><td class="cmd">препроцессор</td><td class="dsc">работает с текстом: раскрывает <code>#include</code> и <code>#define</code>, выбрасывает комментарии</td><td class="dsc">«файл не найден»</td></tr>
+        <tr><td class="cmd">компилятор</td><td class="dsc">переводит C++ в ассемблер, проверяет синтаксис и типы</td><td class="dsc">почти все ошибки, которые вы видите</td></tr>
+        <tr><td class="cmd">ассемблер</td><td class="dsc">переводит ассемблер в машинный код</td><td class="dsc">практически никогда</td></tr>
+        <tr><td class="cmd">линковщик</td><td class="dsc">сшивает объектные файлы со стандартной библиотекой в один исполняемый</td><td class="dsc"><code>undefined reference</code></td></tr>
+      </table>
+    </div>
+    <p class="hint">Компилируемый язык тем и отличается: вся эта работа делается <strong>один раз, до запуска</strong>. Пользователю достаётся готовый машинный код. Любой шаг можно остановить и посмотреть глазами: <code>g++ -E</code>, <code>-S</code>, <code>-c</code>.</p>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-sec="Терминал">
+  <div class="wrap">
+    <div class="eyebrow">Терминал</div>
+    <h2>Минимум для выживания</h2>
+    <div class="cols two">
+      <div class="table-scroll">
+        <table>
+          <tr><th>Команда</th><th>Что делает</th></tr>
+          <tr><td class="cmd">pwd</td><td class="dsc">в какой папке вы сейчас</td></tr>
+          <tr><td class="cmd">ls</td><td class="dsc">что лежит в папке (<code>ls -la</code> — подробно)</td></tr>
+          <tr><td class="cmd">cd имя</td><td class="dsc"><code>cd ..</code> — выше, <code>cd</code> — домой</td></tr>
+          <tr><td class="cmd">mkdir имя</td><td class="dsc">создать папку</td></tr>
+          <tr><td class="cmd">nano файл</td><td class="dsc">открыть редактор</td></tr>
+          <tr><td class="cmd">cat файл</td><td class="dsc">напечатать содержимое</td></tr>
+          <tr><td class="cmd">rm файл</td><td class="dsc">удалить <strong>навсегда</strong>, корзины нет</td></tr>
+          <tr><td class="cmd">man ls</td><td class="dsc">справка, выход — <kbd>q</kbd></td></tr>
+        </table>
+      </div>
+      <div class="panel pin">
+        <h3>Три клавиши, которые экономят год жизни</h3>
+        <ul class="plain">
+          <li><kbd>Tab</kbd> — дописать имя файла за вас</li>
+          <li><kbd>↑</kbd> — вернуть предыдущую команду</li>
+          <li><kbd>Ctrl</kbd>+<kbd>C</kbd> — прервать зависшую программу</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-sec="Домашнее задание">
+  <div class="wrap">
+    <div class="eyebrow">Домашнее задание</div>
+    <h2>К следующему занятию</h2>
+    <ol class="hw">
+      <li>Довести переезд до конца: Linux или macOS с рабочим компилятором.</li>
+      <li>Проверить, что <code>g++ --version</code> отвечает.</li>
+      <li>Написать программу, которая печатает ваше имя и любимое число.</li>
+      <li>Собрать её и запустить.</li>
+    </ol>
+    <p class="hint">Без работающего компилятора дальше ничего не соберётся. Если что-то не встало — пишите в чат группы.</p>
+  </div>
+</section>
+
+</div>
+
+<div class="bar">
+  <button id="prev" aria-label="Предыдущий слайд">←</button>
+  <button id="next" aria-label="Следующий слайд">→</button>
+  <span class="counter"><b id="cur">1</b> / <span id="total">9</span></span>
+  <span class="spacer"></span>
+  <span class="counter" id="secname"></span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  document.getElementById('total').textContent = slides.length;
+
+  function render() {
+    slides.forEach(function (s, n) { s.classList.toggle('is-active', n === i); });
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('progress').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('secname').textContent = slides[i].dataset.sec || '';
+    window.scrollTo(0, 0);
+    try { location.hash = 's' + (i + 1); } catch (e) {}
+  }
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  document.getElementById('next').addEventListener('click', function () { go(i + 1); });
+  document.getElementById('prev').addEventListener('click', function () { go(i - 1); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); go(i + 1); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (k === 'Home') { e.preventDefault(); go(0); }
+    else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
+    else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') {
+      e.preventDefault();
+      if (document.fullscreenElement) { document.exitFullscreen(); }
+      else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
+    }
+  });
+
+  // QR-коды чатов
+  Array.prototype.forEach.call(document.querySelectorAll('.qr-img'), function (el) {
+    try {
+      var q = qrcode(0, 'M');
+      q.addData(el.getAttribute('data-url'));
+      q.make();
+      el.innerHTML = q.createSvgTag({ scalable: true, margin: 1 });
+    } catch (e) { /* останется подпись со ссылкой */ }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) { i = Math.max(0, Math.min(slides.length - 1, parseInt(m[1], 10) - 1)); }
+  render();
+})();
+</script>
+
+</body>
+</html>

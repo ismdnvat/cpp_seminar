@@ -1,0 +1,1025 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0;font:14px/1.5 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Ссылки, константы, классы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* ── Палитра снята с диагностики gcc/clang: magenta = warning, cyan = note,
+      red = error, green = приглашение шелла. Нейтрали уведены в фиолетовый. ── */
+:root {
+  --paper:      #FAF8FC;
+  --paper-2:    #F1EDF6;
+  --rail:       #E4DCEE;
+  --ink:        #1B1524;
+  --ink-soft:   #57496B;
+  --ink-faint:  #8A7CA0;
+  --accent:     #B01490;
+  --accent-dim: #F6E4F3;
+  --note:       #0B6F7C;
+  --err:        #C42430;
+  --ok:         #12704F;
+  --term-bg:    #211A2C;
+  --term-fg:    #EDE6F4;
+  --term-dim:   #A493B8;
+  --shadow:     0 1px 2px rgba(27,21,36,.06), 0 12px 32px -18px rgba(27,21,36,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #150F1D;
+    --paper-2:    #1E1729;
+    --rail:       #322646;
+    --ink:        #F2ECF8;
+    --ink-soft:   #B5A6C8;
+    --ink-faint:  #7E6E94;
+    --accent:     #F175D2;
+    --accent-dim: #2C1B31;
+    --note:       #52CFDA;
+    --err:        #FF7A80;
+    --ok:         #4FD9A7;
+    --term-bg:    #0D0913;
+    --term-fg:    #EDE6F4;
+    --term-dim:   #9585AA;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#150F1D; --paper-2:#1E1729; --rail:#322646; --ink:#F2ECF8;
+  --ink-soft:#B5A6C8; --ink-faint:#7E6E94; --accent:#F175D2; --accent-dim:#2C1B31;
+  --note:#52CFDA; --err:#FF7A80; --ok:#4FD9A7; --term-bg:#0D0913; --term-fg:#EDE6F4;
+  --term-dim:#9585AA;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(15px, 1.35vw, 19px);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .display {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+code, kbd, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+
+/* ── каркас колоды ── */
+.progress {
+  position: fixed; inset: 0 auto auto 0; height: 3px; width: 0;
+  background: var(--accent); z-index: 40; transition: width .25s ease;
+}
+.deck { min-height: 100svh; display: flex; flex-direction: column; }
+.slide {
+  display: none;
+  flex: 1; min-height: 100svh;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1.1rem, 5vw, 5rem) clamp(4.5rem, 8vh, 6rem);
+  flex-direction: column; justify-content: center; gap: clamp(1rem, 2.2vh, 1.9rem);
+}
+.slide.is-active { display: flex; }
+.wrap { width: 100%; max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: clamp(.9rem, 2vh, 1.7rem); }
+
+/* ── шапка слайда: секция + бюджет времени ── */
+.eyebrow { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; }
+.eyebrow .sec {
+  font-family: "JetBrains Mono", monospace; font-size: .72em; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+.eyebrow .clock {
+  font-family: "JetBrains Mono", monospace; font-size: .7em; color: var(--ink-faint);
+  border: 1px solid var(--rail); border-radius: 999px; padding: .1em .7em;
+  font-variant-numeric: tabular-nums;
+}
+h2 { font-size: clamp(1.8rem, 4.2vw, 3.3rem); }
+.sub { color: var(--ink-soft); max-width: 62ch; font-size: 1.06em; }
+
+/* ── терминал ── */
+.term {
+  background: var(--term-bg); color: var(--term-fg); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.4rem) clamp(1rem, 2vw, 1.5rem);
+  font-family: "JetBrains Mono", monospace; font-size: clamp(.78rem, 1.15vw, 1.02rem);
+  line-height: 1.65; overflow-x: auto; box-shadow: var(--shadow);
+  white-space: pre; tab-size: 4;
+}
+.term .p { color: var(--ok); font-weight: 700; }
+.term .c { color: var(--term-fg); font-weight: 700; }
+.term .o { color: var(--term-dim); }
+.term .e { color: #FF7A80; font-weight: 700; }
+.term .w { color: #F175D2; font-weight: 700; }
+.term .n { color: #52CFDA; }
+.term .cm { color: var(--term-dim); font-style: italic; }
+
+/* ── код на «бумаге» ── */
+pre.code {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.3rem) clamp(1rem, 2vw, 1.4rem); margin: 0;
+  font-size: clamp(.8rem, 1.2vw, 1.05rem); line-height: 1.6; overflow-x: auto;
+}
+pre.code .k { color: var(--accent); font-weight: 700; }
+pre.code .s { color: var(--ok); }
+pre.code .pp { color: var(--note); }
+pre.code .cm { color: var(--ink-faint); font-style: italic; }
+pre.code .hl { background: var(--accent-dim); border-radius: 3px; padding: 0 .15em; }
+
+/* ── сетки ── */
+.cols { display: grid; gap: clamp(.8rem, 1.6vw, 1.4rem); }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.cols.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.panel {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 12px;
+  padding: clamp(.9rem, 1.7vw, 1.3rem); display: flex; flex-direction: column; gap: .5rem;
+}
+.panel h3 { font-size: 1.12em; }
+.panel p { margin: 0; color: var(--ink-soft); font-size: .95em; }
+.panel ul { margin: 0; padding-left: 1.1em; color: var(--ink-soft); font-size: .95em; }
+.panel li + li { margin-top: .3em; }
+
+/* один выделенный блок, а не «всё карточки» */
+.pin { background: var(--accent-dim); border-color: transparent; }
+.pin h3 { color: var(--accent); }
+.pin p, .pin ul { color: var(--ink); }
+
+/* ── таблица команд ── */
+table { border-collapse: collapse; width: 100%; font-size: clamp(.82rem, 1.15vw, 1rem); }
+th, td { text-align: left; padding: .42em .8em .42em 0; border-bottom: 1px solid var(--rail); vertical-align: baseline; }
+th { color: var(--ink-faint); font-weight: 600; font-size: .8em; text-transform: uppercase; letter-spacing: .08em; }
+td.cmd { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+td.dsc { color: var(--ink-soft); }
+.table-scroll { overflow-x: auto; }
+
+/* ── таймлайн стандартов: порядок здесь несёт смысл ── */
+.timeline { display: flex; gap: 0; overflow-x: auto; padding-bottom: .4rem; }
+.tl-step { flex: 1 0 auto; min-width: 108px; padding: 0 .75rem; border-left: 2px solid var(--rail); }
+.tl-step:first-child { border-left-color: var(--accent); }
+.tl-step .y { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 1.05em; }
+.tl-step .what { color: var(--ink-soft); font-size: .85em; display: block; margin-top: .2em; }
+.tl-step.now { border-left-color: var(--accent); }
+.tl-step.now .y { color: var(--accent); }
+
+/* ── конвейер сборки: настоящая последовательность, порядок обязателен ── */
+.pipe { display: flex; align-items: stretch; gap: .3rem; overflow-x: auto; padding-bottom: .4rem; }
+.node {
+  flex: 0 0 auto; min-width: 132px; display: flex; flex-direction: column; gap: .1rem;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: clamp(.55rem, 1.1vw, .85rem) clamp(.6rem, 1.2vw, 1rem);
+}
+.node .fn { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: clamp(.82rem, 1.2vw, 1.02rem); }
+.node .fd { font-size: .76em; color: var(--ink-faint); line-height: 1.35; }
+.node.start .fn { color: var(--ink); }
+.node.done { background: var(--accent-dim); border-color: transparent; }
+.node.done .fn { color: var(--accent); }
+.node.done .fd { color: var(--ink-soft); }
+.step {
+  flex: 0 0 auto; min-width: 104px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .05rem; padding: 0 .25rem;
+}
+.step .tool { font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-align: center; }
+.step .glyph { color: var(--ink-faint); font-size: 1.15em; line-height: 1; }
+.step .flag { font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); }
+
+/* ── повестка: пять смысловых групп, порядок несёт смысл ── */
+.plan { display: flex; flex-direction: column; gap: clamp(.5rem, 1.4vh, 1.05rem); }
+.phase {
+  display: grid; grid-template-columns: minmax(148px, 215px) 1fr;
+  gap: clamp(.5rem, 1.6vw, 1.4rem); align-items: start;
+  padding-left: clamp(.7rem, 1.4vw, 1.15rem);
+  border-left: 2px solid var(--rail);
+}
+.phase.focus { border-left-color: var(--accent); }
+.phase-head { display: flex; align-items: baseline; }
+.phase-name {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(.95rem, 1.5vw, 1.28rem); letter-spacing: -.015em; line-height: 1.15;
+}
+.phase.focus .phase-name { color: var(--accent); }
+.phase-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.phase-items li { display: flex; align-items: baseline; gap: .9rem; padding: .24em 0; }
+.phase-items li + li { border-top: 1px solid var(--rail); }
+.phase-items .pt { flex: 1; }
+.phase-items .pd {
+  font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+@media (max-width: 660px) { .phase { grid-template-columns: 1fr; gap: .2rem; } }
+
+/* ── титул ── */
+.hero-num {
+  font-family: "JetBrains Mono", monospace; color: var(--accent); font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase; font-size: .82em;
+}
+h1 { font-size: clamp(2.4rem, 7vw, 5.4rem); }
+.hero-line { height: 2px; background: var(--accent); width: 84px; }
+
+/* ── подвал ── */
+.bar {
+  position: fixed; inset: auto 0 0 0; z-index: 30;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .5rem clamp(.7rem, 3vw, 1.6rem);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--rail);
+  font-family: "JetBrains Mono", monospace; font-size: .78rem;
+}
+.bar .spacer { flex: 1; }
+button {
+  font-family: "JetBrains Mono", monospace; font-size: .78rem; cursor: pointer;
+  background: transparent; color: var(--ink-soft); border: 1px solid var(--rail);
+  border-radius: 7px; padding: .3em .7em;
+}
+button:hover { color: var(--accent); border-color: var(--accent); }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.counter { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.counter b { color: var(--ink); }
+
+/* ── заметки докладчика ── */
+#notes {
+  position: fixed; inset: auto 0 0 0; z-index: 35;
+  background: var(--term-bg); color: var(--term-fg);
+  border-top: 2px solid var(--accent);
+  padding: 1rem clamp(.8rem, 3vw, 1.8rem) 3.1rem;
+  max-height: 52svh; overflow-y: auto;
+  font-size: clamp(.8rem, 1.1vw, .95rem); line-height: 1.55;
+}
+#notes h4 {
+  margin: 0 0 .5rem; font-family: "JetBrains Mono", monospace; font-size: .72rem;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+#notes ul { margin: 0; padding-left: 1.15em; }
+#notes li + li { margin-top: .35em; }
+#notes code { color: #F175D2; }
+#notes-time { color: var(--term-dim); letter-spacing: .08em; }
+
+kbd {
+  border: 1px solid var(--rail); border-bottom-width: 2px; border-radius: 5px;
+  padding: .05em .4em; font-size: .85em; color: var(--ink-soft);
+}
+.hint { color: var(--ink-faint); font-size: .9em; }
+strong { color: var(--ink); font-weight: 600; }
+.big { font-size: clamp(1.1rem, 1.9vw, 1.45rem); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* ══ seminar 2: вопросы, раскрытие ответов, задачи, таймер ══ */
+
+/* ответ скрыт, но место под него занято — слайд не прыгает при раскрытии */
+.reveal { position: relative; border-radius: 12px; min-height: 3.2rem; }
+.reveal:not(.shown) { cursor: pointer; }
+.reveal:not(.shown) > * { visibility: hidden; }
+.reveal:not(.shown)::after {
+  content: attr(data-label);
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--rail); border-radius: 12px; background: var(--paper);
+  font-family: "JetBrains Mono", monospace; font-size: .82em; letter-spacing: .04em; color: var(--ink-faint);
+}
+.reveal:not(.shown):hover::after,
+.reveal:not(.shown):focus-visible::after { border-color: var(--accent); color: var(--accent); }
+.reveal:focus-visible { outline: none; }
+.reveal.shown { animation: rv .2s ease-out; }
+@keyframes rv { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* варианты ответа: зал показывает номер на пальцах */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .55rem; }
+.opt {
+  display: flex; gap: .7rem; align-items: baseline;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: .5rem .85rem; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem);
+  /* длинные варианты переносятся, а не уезжают за край экрана; pre-wrap бережёт пробелы в выводе программ */
+  white-space: pre-wrap; overflow-wrap: anywhere; transition: background .2s, border-color .2s, opacity .2s;
+}
+.opt .n { font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+.opt > span:last-child { min-width: 0; }
+.slide.answered .opt { opacity: .45; }
+.slide.answered .opt.correct { opacity: 1; background: var(--accent-dim); border-color: var(--accent); }
+
+.ask {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(1.05rem, 1.9vw, 1.45rem); letter-spacing: -.01em;
+}
+.label {
+  font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint);
+}
+.stack { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+
+/* ответ: вывод программы + объяснение */
+.answer { display: flex; flex-direction: column; gap: .6rem; }
+.answer .why { background: var(--accent-dim); border-radius: 10px; padding: .75rem 1rem; color: var(--ink); font-size: .96em; }
+.answer .why p + p { margin-top: .45rem; }
+
+/* задачи */
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .7rem; }
+.lvl {
+  display: inline-block; font-family: "JetBrains Mono", monospace; font-size: .66em; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor;
+  border-radius: 999px; padding: .08em .6em; vertical-align: .2em; margin-left: .45em;
+}
+.lvl.l1 { color: var(--ok); }
+.lvl.l2 { color: var(--note); }
+.lvl.l3 { color: var(--accent); }
+.tasklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .7rem; }
+.tasklist .panel h3 { font-size: 1em; }
+pre.code.small, .term.small { font-size: clamp(.72rem, 1vw, .9rem); line-height: 1.5; }
+pre.code .num { color: var(--note); }
+
+/* таймер в подвале */
+#timer { font-variant-numeric: tabular-nums; }
+#timer.running { color: var(--accent); border-color: var(--accent); }
+#timer.done { color: var(--err); border-color: var(--err); }
+.keys-hint { color: var(--ink-faint); font-size: .72rem; }
+@media (max-width: 760px) { .keys-hint { display: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal.shown { animation: none; } }
+
+/* подпись под фрагментом: откуда он */
+.src { font-family: "JetBrains Mono", monospace; font-size: .68em; color: var(--ink-faint); line-height: 1.4; }
+.src code { font-size: 1em; }
+
+/* входной буфер: какие символы кто прочитал */
+.buf { display: flex; flex-wrap: wrap; gap: 4px; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem); }
+.buf .ch { border: 1px solid var(--rail); border-radius: 6px; padding: .15em .5em; background: var(--paper-2); min-width: 1.7em; text-align: center; }
+.buf .ch.nl { color: var(--note); font-weight: 700; }
+.buf .ch.a, .buf-legend i.a { background: var(--accent-dim); border-color: var(--accent); }
+.buf .ch.g, .buf-legend i.g { background: color-mix(in srgb, var(--note) 20%, var(--paper)); border-color: var(--note); }
+.buf .ch.rest { opacity: .45; border-style: dashed; }
+.buf-legend { display: flex; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8em; color: var(--ink-soft); }
+.buf-legend i { display: inline-block; width: .95em; height: .95em; border: 1px solid var(--rail); border-radius: 3px; vertical-align: -.12em; margin-right: .35em; }
+.buf-legend i.rest { border-style: dashed; opacity: .6; }
+.buf .ch.w, .buf-legend i.w { background: color-mix(in srgb, var(--ok) 20%, var(--paper)); border-color: var(--ok); }
+
+/* полные программы: чем длиннее, тем мельче; и страховка от выхода за экран */
+pre.code.xsmall { font-size: clamp(.62rem, .85vw, .8rem); line-height: 1.42; }
+pre.code { max-height: 74svh; overflow: auto; }
+
+/* текст на всю ширину */
+.slide .sub { max-width: none; }
+body .doc { max-width: 1100px; }
+body .doc .lede { max-width: none; }
+
+/* шире на больших экранах, таблицы без лишней прокрутки */
+.wrap { max-width: min(1680px, 94vw); }
+.cols > * { min-width: 0; }
+.slide table td.cmd { white-space: normal; }
+
+.bar button.on { color: var(--accent); border-color: var(--accent); }
+
+/* режимы vim: Normal в центре, остальные вокруг */
+.modes { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; gap: .6rem .5rem; align-items: center; }
+.mode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .65rem .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.mode b { font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-size: 1.12em; }
+.mode small { color: var(--ink-soft); font-size: .86em; line-height: 1.35; }
+.mode.main { grid-column: 3; grid-row: 1 / span 2; align-self: stretch; justify-content: center; text-align: center; background: var(--accent-dim); border-color: transparent; }
+.mode.main b { color: var(--accent); font-size: 1.6em; }
+.edge { display: flex; flex-direction: column; align-items: center; gap: .15rem; font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint); white-space: nowrap; }
+.edge .to { color: var(--accent); font-weight: 700; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } .mode.main { grid-column: auto; grid-row: auto; } .edge { flex-direction: row; gap: .8rem; } }
+.keys td.cmd { white-space: nowrap; }
+.vis { color: var(--err); }
+
+.flow { display: flex; align-items: stretch; gap: .45rem; flex-wrap: wrap; }
+.fnode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .6rem .75rem; display: flex; flex-direction: column; gap: .1rem; flex: 1 1 0; min-width: 0; }
+.fnode b { font-family: "JetBrains Mono", monospace; font-size: 1em; }
+.fnode small { color: var(--ink-soft); font-size: .84em; line-height: 1.3; }
+.fnode.out { background: var(--accent-dim); border-color: transparent; }
+.fnode.out b { color: var(--accent); }
+.arr { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1rem; font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); white-space: nowrap; }
+.arr b { color: var(--accent); font-weight: 700; }
+@media (max-width: 900px) { .flow { flex-direction: column; } .arr { flex-direction: row; gap: .5rem; } }
+ol.steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: .4rem; }
+ol.steps code { white-space: nowrap; }
+.mini { font-size: .92em; }
+.slide table td.cmd code { white-space: nowrap; }
+.term .y { color: #E8C468; }
+</style>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+<!-- 1 -->
+<section class="slide is-active" data-sec="Семинар 6" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    <div class="hero-num">C++ · 1 курс · семинар 06</div>
+<h1>Ссылки, константы, классы</h1>
+<div class="hero-line"></div>
+<p class="sub big">Ссылки, const, приведения типов, размер структур, приватность</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = <span class="num">1</span>;
+    <span class="k">int</span>&amp; r = x;
+    r = <span class="num">5</span>;
+    <span class="k">std</span>::cout &lt;&lt; x &lt;&lt; <span class="s">'\n'</span>;
+    <span class="k">int</span> y = <span class="num">10</span>;
+    r = y;
+    y = <span class="num">20</span>;
+    <span class="k">std</span>::cout &lt;&lt; x &lt;&lt; <span class="s">' '</span> &lt;&lt; r &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>5
+10 10</span></div><div class="opt"><span class="n">2</span><span>5
+10 20</span></div><div class="opt"><span class="n">3</span><span>5
+1 10</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="o">5</span>
+<span class="o">10 10</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>const, указатели и ссылки: что скомпилируется?</h2>
+<p class="sub"><code>int x = 1, y = 2;</code></p><div class="table-scroll"><table class="keys"><tr><th>объявление</th><th>изменить x через неё</th><th></th><th>направить на y</th><th></th></tr><tr><td class="cmd">const int* a = &x</td><td class="dsc"><code>*a = 10</code></td><td class="dsc"><div class="reveal" data-label="?">нельзя</div></td><td class="dsc"><code>a = &amp;y</code></td><td class="dsc"><div class="reveal" data-label="?">можно</div></td></tr><tr><td class="cmd">int* const b = &x</td><td class="dsc"><code>*b = 10</code></td><td class="dsc"><div class="reveal" data-label="?">можно</div></td><td class="dsc"><code>b = &amp;y</code></td><td class="dsc"><div class="reveal" data-label="?">нельзя</div></td></tr><tr><td class="cmd">const int* const e = &x</td><td class="dsc"><code>*e = 10</code></td><td class="dsc"><div class="reveal" data-label="?">нельзя</div></td><td class="dsc"><code>e = &amp;y</code></td><td class="dsc"><div class="reveal" data-label="?">нельзя</div></td></tr><tr><td class="cmd">const int& c = x</td><td class="dsc"><code>c = 10</code></td><td class="dsc"><div class="reveal" data-label="?">нельзя</div></td><td class="dsc">—</td><td class="dsc"></td></tr><tr><td class="cmd">int& const d = x</td><td class="dsc"><code>d = 10</code></td><td class="dsc"><div class="reveal" data-label="?">CE уже в объявлении</div></td><td class="dsc">—</td><td class="dsc"></td></tr></table></div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Какие строки не скомпилируются?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="cm"> 1  </span><span class="k">int</span> main() {
+<span class="cm"> 2  </span>    <span class="k">int</span> x = <span class="num">1</span>;
+<span class="cm"> 3  </span>    <span class="k">int</span> y = <span class="num">2</span>;
+<span class="cm"> 4  </span>    <span class="k">const</span> <span class="k">int</span>* a = &amp;x;
+<span class="cm"> 5  </span>    <span class="k">int</span>* <span class="k">const</span> b = &amp;x;
+<span class="cm"> 6  </span>    <span class="k">const</span> <span class="k">int</span>&amp; c = x;
+<span class="cm"> 7  </span>    <span class="k">int</span>&amp; <span class="k">const</span> d = x;
+<span class="cm"> 8  </span>    *a = <span class="num">10</span>;
+<span class="cm"> 9  </span>    a = &amp;y;
+<span class="cm">10  </span>    *b = <span class="num">10</span>;
+<span class="cm">11  </span>    b = &amp;y;
+<span class="cm">12  </span>    c = <span class="num">10</span>;
+<span class="cm">13  </span>}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>8, 11, 12</span></div><div class="opt correct"><span class="n">2</span><span>7, 8, 11, 12</span></div><div class="opt"><span class="n">3</span><span>8, 9, 10, 11, 12</span></div><div class="opt"><span class="n">4</span><span>только 12</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ const_quiz.cpp</span>
+<span class="e">const_quiz.cpp:7:16: error: ‘const’ qualifiers cannot be applied to ‘int&amp;’</span>
+<span class="e">const_quiz.cpp:8:8: error: assignment of read-only location ‘* a’</span>
+<span class="e">const_quiz.cpp:11:7: error: assignment of read-only variable ‘b’</span>
+<span class="e">const_quiz.cpp:12:7: error: assignment of read-only reference ‘c’</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Сколько места занимает ссылка?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> WithReference {
+    <span class="k">int</span>&amp; r;
+};
+
+<span class="k">struct</span> WithPointer {
+    <span class="k">int</span>* p;
+};
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(WithReference) &lt;&lt; <span class="s">' '</span> &lt;&lt; <span class="k">sizeof</span>(WithPointer) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>4 8</span></div><div class="opt correct"><span class="n">2</span><span>8 8</span></div><div class="opt"><span class="n">3</span><span>0 8</span></div><div class="opt"><span class="n">4</span><span>CE</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">8 8</span></div></div></div><div class="reveal" data-label="а что в машинном коде  →"><div class="stack"><pre class="code small"><span class="k">void</span> IncrementByPointer(<span class="k">int</span>* p) {
+    ++*p;
+}
+
+<span class="k">void</span> IncrementByReference(<span class="k">int</span>&amp; r) {
+    ++r;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ -O2 -S ref_asm.cpp</span>
+<span class="o">_Z18IncrementByPointerPi:</span>
+<span class="o">    addl    $1, (%rdi)</span>
+<span class="o">    ret</span>
+<span class="o">_Z20IncrementByReferenceRi:</span>
+<span class="o">    addl    $1, (%rdi)</span>
+<span class="o">    ret</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = <span class="num">1</span>;
+    <span class="k">double</span>&amp; y = x;
+    x = <span class="num">2</span>;
+    <span class="k">std</span>::cout &lt;&lt; y &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет 2</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ double_ref.cpp</span>
+<span class="e">double_ref.cpp:5:17: error: cannot bind non-const lvalue</span>
+<span class="e">  reference of type ‘double&amp;’ to a value of type ‘int’</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если добавить const?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = <span class="num">1</span>;
+    <span class="k">const</span> <span class="k">double</span>&amp; y = x;
+    x = <span class="num">2</span>;
+    <span class="k">std</span>::cout &lt;&lt; y &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>выведет 2</span></div><div class="opt correct"><span class="n">3</span><span>выведет 1</span></div><div class="opt"><span class="n">4</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;cstddef&gt;</span>
+
+<span class="k">void</span> f(<span class="k">std</span>::<span class="k">size_t</span>&amp; x) {
+    ++x;
+}
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = <span class="num">0</span>;
+    f(x);
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>ничего, всё корректно</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ size_t_ref.cpp</span>
+<span class="e">size_t_ref.cpp:9:7: error: cannot bind non-const lvalue reference</span>
+<span class="e">  of type ‘std::size_t&amp;’ {aka ‘long unsigned int&amp;’}</span>
+<span class="e">  to a value of type ‘int’</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">const</span> <span class="k">int</span>&amp; f() {
+    <span class="k">return</span> <span class="num">42</span>;
+}
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = f();
+    <span class="k">std</span>::cout &lt;&lt; x &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt correct"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>выведет 42</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall return_temp.cpp</span>
+<span class="w">return_temp.cpp:4:12: warning: returning reference to temporary</span>
+<span class="p">$</span> <span class="c">./a.out</span>
+<span class="e">Segmentation fault (core dumped)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> f() {
+    <span class="k">int</span>* p = <span class="k">new</span> <span class="k">int</span>;
+    <span class="k">return</span> *p;
+}
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = f();
+    <span class="k">delete</span> &amp;x;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt correct"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>ничего, всё корректно</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ -Wall new_delete.cpp</span>
+<span class="w">warning: ‘void operator delete(void*, long unsigned int)’</span>
+<span class="w">  called on unallocated object ‘x’ [-Wfree-nonheap-object]</span>
+<span class="p">$</span> <span class="c">./a.out</span>
+<span class="e">free(): invalid pointer</span>
+<span class="e">Aborted (core dumped)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если int& x = f()?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> f() {
+    <span class="k">int</span>* p = <span class="k">new</span> <span class="k">int</span>;
+    <span class="k">return</span> *p;
+}
+
+<span class="k">int</span> main() {
+    <span class="k">int</span>&amp; x = f();
+    <span class="k">delete</span> &amp;x;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>ничего, всё корректно</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ new_delete_ref.cpp</span>
+<span class="e">new_delete_ref.cpp:7:15: error: cannot bind non-const lvalue</span>
+<span class="e">  reference of type ‘int&amp;’ to an rvalue of type ‘int’</span></div></div></div><div class="reveal" data-label="а если и f вернёт int&  →"><div class="stack"><pre class="code small"><span class="k">int</span>&amp; f() {
+    <span class="k">int</span>* p = <span class="k">new</span> <span class="k">int</span>;
+    <span class="k">return</span> *p;
+}
+
+<span class="k">int</span> main() {
+    <span class="k">int</span>&amp; x = f();
+    <span class="k">delete</span> &amp;x;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./a.out; echo $?</span>
+<span class="o">0</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt; a;
+    <span class="k">int</span> x = <span class="num">0</span>;
+    <span class="k">int</span> y = <span class="num">1</span>;
+    a.push_back(x);
+    a.push_back(y);
+    <span class="k">int</span>&amp; s = a[<span class="num">0</span>];
+    <span class="k">int</span> t = a[<span class="num">1</span>];
+    <span class="k">std</span>::vector&lt;<span class="k">int</span>&gt;&amp; b = a;
+    b[<span class="num">0</span>] = <span class="num">2</span>;
+    b[<span class="num">1</span>] = <span class="num">3</span>;
+    <span class="k">std</span>::cout &lt;&lt; s &lt;&lt; t &lt;&lt; a[<span class="num">0</span>] &lt;&lt; a[<span class="num">1</span>] &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>2123</span></div><div class="opt"><span class="n">2</span><span>0123</span></div><div class="opt"><span class="n">3</span><span>2323</span></div><div class="opt"><span class="n">4</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">2123</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если vector&lt;int&amp;&gt;?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::vector&lt;<span class="k">int</span>&amp;&gt; a;
+    <span class="k">int</span> x = <span class="num">0</span>;
+    <span class="k">int</span> y = <span class="num">1</span>;
+    a.push_back(x);
+    a.push_back(y);
+    <span class="k">int</span>&amp; s = a[<span class="num">0</span>];
+    <span class="k">int</span> t = a[<span class="num">1</span>];
+    <span class="k">std</span>::vector&lt;<span class="k">int</span>&amp;&gt;&amp; b = a;
+    b[<span class="num">0</span>] = <span class="num">2</span>;
+    b[<span class="num">1</span>] = <span class="num">3</span>;
+    <span class="k">std</span>::cout &lt;&lt; s &lt;&lt; t &lt;&lt; a[<span class="num">0</span>] &lt;&lt; a[<span class="num">1</span>] &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>2323</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ vector_of_refs.cpp</span>
+<span class="e">.../new_allocator.h:126:7: error: forming pointer to reference type ‘int&amp;’</span>
+<span class="e">.../allocator.h:189:7: error: forming pointer to reference type ‘int&amp;’</span>
+<span class="o">…ещё несколько сотен строк</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE, RE, UB или что выведет?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = <span class="num">0</span>;
+    <span class="k">int</span>* p = &amp;x;
+    <span class="k">int</span>*&amp; r = ++p;
+    --r;
+    ++*p;
+    <span class="k">std</span>::cout &lt;&lt; x &lt;&lt; *p &lt;&lt; *r &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>111</span></div><div class="opt"><span class="n">2</span><span>011</span></div><div class="opt"><span class="n">3</span><span>101</span></div><div class="opt"><span class="n">4</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">111</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>А если int* const& r?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> x = <span class="num">0</span>;
+    <span class="k">int</span>* p = &amp;x;
+    <span class="k">int</span>* <span class="k">const</span>&amp; r = ++p;
+    --r;
+    ++*p;
+    <span class="k">std</span>::cout &lt;&lt; x &lt;&lt; *p &lt;&lt; *r &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>RE</span></div><div class="opt"><span class="n">3</span><span>UB</span></div><div class="opt"><span class="n">4</span><span>111</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ ptr_ref_const.cpp</span>
+<span class="e">ptr_ref_const.cpp:7:7: error: decrement of read-only reference ‘r’</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин · для сильных групп" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Можно ли неявно int** → const int**?</h2>
+<div class="cols two"><div class="stack"><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">const</span> <span class="k">int</span> x = <span class="num">42</span>;
+    <span class="k">int</span>* p = <span class="k">nullptr</span>;
+    <span class="k">const</span> <span class="k">int</span>** pp = &amp;p;
+    *pp = &amp;x;
+    *p = <span class="num">0</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>CE</span></div><div class="opt"><span class="n">2</span><span>компилируется</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">g++ ptrptr.cpp</span>
+<span class="e">ptrptr.cpp:4:22: error: invalid conversion from ‘int**’ to ‘const int**’</span></div></div></div><div class="reveal" data-label="а int** → const int* const*?  →"><div class="stack"><pre class="code small"><span class="k">int</span> main() {
+    <span class="k">int</span>* p = <span class="k">nullptr</span>;
+    <span class="k">const</span> <span class="k">int</span>* <span class="k">const</span>* pp = &amp;p;
+    (<span class="k">void</span>)pp;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">g++ ptrptr_ok.cpp</span>
+<span class="o">(без ошибок)</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-sec="Часть 2" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Часть 2</span></div><h2>Часть 2. Классы и структуры</h2>
+
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide" data-sec="Вопрос залу" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">struct</span> A {
+    <span class="k">char</span> a;
+    <span class="k">int</span> b;
+    <span class="k">char</span> c;
+};
+
+<span class="k">struct</span> B {
+    <span class="k">int</span> b;
+    <span class="k">char</span> a;
+    <span class="k">char</span> c;
+};
+
+<span class="k">struct</span> C {
+    <span class="k">char</span> a;
+    <span class="k">double</span> b;
+    <span class="k">char</span> c;
+};
+
+<span class="k">struct</span> D {
+    <span class="k">double</span> b;
+    <span class="k">char</span> a;
+    <span class="k">char</span> c;
+};
+
+<span class="k">struct</span> Empty {};
+
+<span class="k">int</span> main() {
+    <span class="k">std</span>::cout &lt;&lt; <span class="k">sizeof</span>(A) &lt;&lt; <span class="s">' '</span> &lt;&lt; <span class="k">sizeof</span>(B) &lt;&lt; <span class="s">' '</span> &lt;&lt; <span class="k">sizeof</span>(C) &lt;&lt; <span class="s">' '</span> &lt;&lt; <span class="k">sizeof</span>(D) &lt;&lt; <span class="s">' '</span>
+              &lt;&lt; <span class="k">sizeof</span>(Empty) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>6 6 10 10 0</span></div><div class="opt correct"><span class="n">2</span><span>12 8 24 16 1</span></div><div class="opt"><span class="n">3</span><span>12 12 24 24 1</span></div><div class="opt"><span class="n">4</span><span>6 6 10 10 1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">12 8 24 16 1</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 19 -->
+<section class="slide" data-sec="Выравнивание" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Выравнивание</span></div><h2>Как поля лежат в памяти</h2>
+<div class="stack"><style>.buf .ch.dbl, .buf-legend i.dbl { background: color-mix(in srgb, #E8C468 35%, var(--paper)); border-color: #C9A227; }</style><span class="label">struct A { char a; int b; char c; } — 12 байт</span><div class="buf" style="font-size:1.25em"><span class="ch a">a</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch g">b</span><span class="ch g">b</span><span class="ch g">b</span><span class="ch g">b</span><span class="ch a">c</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span></div><span class="label">struct B { int b; char a; char c; } — 8 байт</span><div class="buf" style="font-size:1.25em"><span class="ch g">b</span><span class="ch g">b</span><span class="ch g">b</span><span class="ch g">b</span><span class="ch a">a</span><span class="ch a">c</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span></div><span class="label">struct C { char a; double b; char c; } — 24 байта</span><div class="buf" style="font-size:1.25em"><span class="ch a">a</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch a">c</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span></div><span class="label">struct D { double b; char a; char c; } — 16 байт</span><div class="buf" style="font-size:1.25em"><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch dbl">b</span><span class="ch a">a</span><span class="ch a">c</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span><span class="ch rest">&nbsp;</span></div><span class="label">struct Empty {} — 1 байт</span><div class="buf" style="font-size:1.25em"><span class="ch rest">&nbsp;</span></div><div class="buf-legend"><span><i class="a"></i>char</span><span><i class="g"></i>int</span><span><i class="dbl"></i>double</span><span><i class="rest"></i>пустые байты</span></div></div>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE или выведет 1?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> C {
+  <span class="k">private</span>:
+    <span class="k">class</span> Inner {
+      <span class="k">public</span>:
+        <span class="k">int</span> x = <span class="num">1</span>;
+
+      <span class="k">private</span>:
+        <span class="k">int</span> y = <span class="num">2</span>;
+    };
+
+  <span class="k">public</span>:
+    Inner f() {
+        <span class="k">return</span> Inner();
+    }
+};
+
+<span class="k">int</span> main() {
+    C c;
+    <span class="k">std</span>::cout &lt;&lt; c.f().x &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt"><span class="n">1</span><span>CE</span></div><div class="opt correct"><span class="n">2</span><span>выведет 1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">1</span></div></div></div><div class="reveal" data-label="а если написать имя типа  →"><div class="stack"><pre class="code small">C::Inner inner = c.f();</pre><div class="term small"><span class="e">error: ‘class C::Inner’ is private within this context</span></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>CE или выведет 2?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> C {
+  <span class="k">private</span>:
+    <span class="k">void</span> f(<span class="k">int</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="num">1</span>;
+    }
+
+  <span class="k">public</span>:
+    <span class="k">void</span> f(<span class="k">float</span>) {
+        <span class="k">std</span>::cout &lt;&lt; <span class="num">2</span>;
+    }
+};
+
+<span class="k">int</span> main() {
+    C c;
+    c.f(<span class="num">0</span>);
+    c.f(<span class="num">3.14</span>);
+}</pre></div><div class="stack"><div class="table-scroll"><table class="keys"><tr><th>вызов</th><th>ответ</th></tr><tr><td class="cmd">c.f(0)</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>CE</b>: <code>‘void C::f(int)’ is private within this context</code></div></td></tr><tr><td class="cmd">c.f(3.14)</td><td class="dsc"><div class="reveal" data-label="ответ  →"><b>CE</b>: <code>call of overloaded ‘f(double)’ is ambiguous</code></div></td></tr></table></div></div></div>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="slide" data-sec="Вопрос залу" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two"><div class="stack"><pre class="code xsmall"><span class="pp">#include &lt;iostream&gt;</span>
+
+<span class="k">class</span> Account {
+  <span class="k">public</span>:
+    <span class="k">int</span> GetId() <span class="k">const</span> {
+        <span class="k">return</span> id_;
+    }
+
+  <span class="k">private</span>:
+    <span class="k">int</span> id_ = <span class="num">7</span>;
+    <span class="k">int</span> balance_ = <span class="num">100</span>;
+};
+
+<span class="k">struct</span> AccountView {
+    <span class="k">int</span> id;
+    <span class="k">int</span> balance;
+};
+
+<span class="k">int</span> main() {
+    Account account;
+    AccountView&amp; view = <span class="k">reinterpret_cast</span>&lt;AccountView&amp;&gt;(account);
+    <span class="k">std</span>::cout &lt;&lt; view.balance &lt;&lt; <span class="s">'\n'</span>;
+    view.balance = <span class="num">1000000</span>;
+    <span class="k">std</span>::cout &lt;&lt; view.balance &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты</span><div class="options"><div class="opt correct"><span class="n">1</span><span>100
+1000000</span></div><div class="opt"><span class="n">2</span><span>7
+1000000</span></div><div class="opt"><span class="n">3</span><span>CE</span></div><div class="opt"><span class="n">4</span><span>UB</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./a.out</span>
+<span class="o">100</span>
+<span class="o">1000000</span></div></div></div></div></div>
+  </div>
+</section>
+
+</div>
+
+<div id="notes" hidden><h4>Заметки семинаристу<span id="notes-time"></span></h4><ul id="notes-body"></ul></div>
+
+<div class="bar">
+  <button id="prev" aria-label="Предыдущий слайд">←</button>
+  <button id="next" aria-label="Дальше">→</button>
+  <span class="counter"><b id="cur">1</b> / <span id="total">0</span></span>
+  <button id="timer" hidden>таймер 0:00</button>
+  <span class="spacer"></span>
+  <span class="counter" id="secname"></span>
+  <span class="keys-hint">→ дальше и ответы · T таймер · D тема</span>
+  
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var notes = document.getElementById('notes');
+  var notesBody = document.getElementById('notes-body');
+  var notesOpen = false;
+
+  var timerBtn = document.getElementById('timer');
+  var tLeft = 0, tOwner = -1, tRunning = false, tHandle = null;
+
+  function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  function drawTimer() {
+    if (timerBtn.classList.contains('done')) { timerBtn.textContent = 'время вышло'; return; }
+    timerBtn.textContent = (tRunning ? 'идёт ' : 'таймер ') + fmt(tLeft);
+  }
+  function stopTimer() { tRunning = false; clearInterval(tHandle); timerBtn.classList.remove('running'); }
+  function toggleTimer() {
+    if (timerBtn.hidden) return;
+    if (timerBtn.classList.contains('done')) {
+      timerBtn.classList.remove('done');
+      tLeft = +(slides[tOwner] && slides[tOwner].dataset.timer || 0);
+      drawTimer(); return;
+    }
+    if (tRunning) { stopTimer(); drawTimer(); return; }
+    if (tLeft <= 0) return;
+    tRunning = true; timerBtn.classList.add('running');
+    tHandle = setInterval(function () {
+      tLeft -= 1;
+      if (tLeft <= 0) { tLeft = 0; stopTimer(); timerBtn.classList.add('done'); }
+      drawTimer();
+    }, 1000);
+    drawTimer();
+  }
+
+  document.getElementById('total').textContent = slides.length;
+
+  function render() {
+    slides.forEach(function (s, n) { s.classList.toggle('is-active', n === i); });
+    var s = slides[i];
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('progress').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('secname').textContent = s.dataset.sec || '';
+    notesBody.innerHTML = s.dataset.notes || '<li>—</li>';
+    var t = s.dataset.time || '';
+    document.getElementById('notes-time').textContent = t ? '  ·  ' + t : '';
+
+    var dur = +(s.dataset.timer || 0);
+    if (dur && !tRunning && tOwner !== i) {
+      tLeft = dur; tOwner = i; timerBtn.classList.remove('done');
+    }
+    timerBtn.hidden = !(dur || tRunning);
+    drawTimer();
+
+    window.scrollTo(0, 0);
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+  }
+
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  function show(r) {
+    r.classList.add('shown');
+    if (r.hasAttribute('data-answer')) {
+      var sl = r.closest('.slide');
+      if (sl) sl.classList.add('answered');
+    }
+  }
+  function revealNext() {
+    var r = slides[i].querySelector('.reveal:not(.shown)');
+    if (r) { show(r); return true; }
+    return false;
+  }
+  function next() { if (!revealNext()) go(i + 1); }
+
+  function toggleNotes() {
+    notesOpen = !notesOpen;
+    notes.hidden = !notesOpen;
+    document.getElementById('notes-btn').classList.toggle('on', notesOpen);
+  }
+  function toggleTheme() {
+    var root = document.documentElement;
+    var cur = root.getAttribute('data-theme');
+    if (!cur) cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.reveal'), function (r) {
+    r.setAttribute('tabindex', '0');
+    r.setAttribute('role', 'button');
+    r.addEventListener('click', function () { if (!r.classList.contains('shown')) show(r); });
+    r.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter') && !r.classList.contains('shown')) { e.preventDefault(); e.stopPropagation(); show(r); }
+    });
+  });
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', function () { go(i - 1); });
+  
+  timerBtn.addEventListener('click', toggleTimer);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); next(); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (k === 'Home') { e.preventDefault(); go(0); }
+    else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
+    
+    else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); toggleTimer(); }
+    else if (k === 'r' || k === 'R' || k === 'к' || k === 'К') {
+      e.preventDefault();
+      Array.prototype.forEach.call(slides[i].querySelectorAll('.reveal:not(.shown)'), show);
+    }
+    else if (k === 'd' || k === 'D' || k === 'в' || k === 'В') { e.preventDefault(); toggleTheme(); }
+    else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') {
+      e.preventDefault();
+      if (document.fullscreenElement) { document.exitFullscreen(); }
+      else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
+    }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) { i = Math.max(0, Math.min(slides.length - 1, parseInt(m[1], 10) - 1)); }
+  render();
+})();
+</script>
+
+</body>
+</html>

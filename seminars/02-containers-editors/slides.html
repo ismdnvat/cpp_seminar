@@ -1,0 +1,1974 @@
+<title>Контейнеры и редакторы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* ── Палитра снята с диагностики gcc/clang: magenta = warning, cyan = note,
+      red = error, green = приглашение шелла. Нейтрали уведены в фиолетовый. ── */
+:root {
+  --paper:      #FAF8FC;
+  --paper-2:    #F1EDF6;
+  --rail:       #E4DCEE;
+  --ink:        #1B1524;
+  --ink-soft:   #57496B;
+  --ink-faint:  #8A7CA0;
+  --accent:     #B01490;
+  --accent-dim: #F6E4F3;
+  --note:       #0B6F7C;
+  --err:        #C42430;
+  --ok:         #12704F;
+  --term-bg:    #211A2C;
+  --term-fg:    #EDE6F4;
+  --term-dim:   #A493B8;
+  --shadow:     0 1px 2px rgba(27,21,36,.06), 0 12px 32px -18px rgba(27,21,36,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #150F1D;
+    --paper-2:    #1E1729;
+    --rail:       #322646;
+    --ink:        #F2ECF8;
+    --ink-soft:   #B5A6C8;
+    --ink-faint:  #7E6E94;
+    --accent:     #F175D2;
+    --accent-dim: #2C1B31;
+    --note:       #52CFDA;
+    --err:        #FF7A80;
+    --ok:         #4FD9A7;
+    --term-bg:    #0D0913;
+    --term-fg:    #EDE6F4;
+    --term-dim:   #9585AA;
+    --shadow:     0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#150F1D; --paper-2:#1E1729; --rail:#322646; --ink:#F2ECF8;
+  --ink-soft:#B5A6C8; --ink-faint:#7E6E94; --accent:#F175D2; --accent-dim:#2C1B31;
+  --note:#52CFDA; --err:#FF7A80; --ok:#4FD9A7; --term-bg:#0D0913; --term-fg:#EDE6F4;
+  --term-dim:#9585AA;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(15px, 1.35vw, 19px);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, .display {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  text-wrap: balance;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+code, kbd, pre, .mono { font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace; }
+
+/* ── каркас колоды ── */
+.progress {
+  position: fixed; inset: 0 auto auto 0; height: 3px; width: 0;
+  background: var(--accent); z-index: 40; transition: width .25s ease;
+}
+.deck { min-height: 100svh; display: flex; flex-direction: column; }
+.slide {
+  display: none;
+  flex: 1; min-height: 100svh;
+  padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1.1rem, 5vw, 5rem) clamp(4.5rem, 8vh, 6rem);
+  flex-direction: column; justify-content: center; gap: clamp(1rem, 2.2vh, 1.9rem);
+}
+.slide.is-active { display: flex; }
+.wrap { width: 100%; max-width: 1180px; margin-inline: auto; display: flex; flex-direction: column; gap: clamp(.9rem, 2vh, 1.7rem); }
+
+/* ── шапка слайда: секция + бюджет времени ── */
+.eyebrow { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; }
+.eyebrow .sec {
+  font-family: "JetBrains Mono", monospace; font-size: .72em; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+.eyebrow .clock {
+  font-family: "JetBrains Mono", monospace; font-size: .7em; color: var(--ink-faint);
+  border: 1px solid var(--rail); border-radius: 999px; padding: .1em .7em;
+  font-variant-numeric: tabular-nums;
+}
+h2 { font-size: clamp(1.8rem, 4.2vw, 3.3rem); }
+.sub { color: var(--ink-soft); max-width: 62ch; font-size: 1.06em; }
+
+/* ── терминал ── */
+.term {
+  background: var(--term-bg); color: var(--term-fg); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.4rem) clamp(1rem, 2vw, 1.5rem);
+  font-family: "JetBrains Mono", monospace; font-size: clamp(.78rem, 1.15vw, 1.02rem);
+  line-height: 1.65; overflow-x: auto; box-shadow: var(--shadow);
+  white-space: pre; tab-size: 4;
+}
+.term .p { color: var(--ok); font-weight: 700; }
+.term .c { color: var(--term-fg); font-weight: 700; }
+.term .o { color: var(--term-dim); }
+.term .e { color: #FF7A80; font-weight: 700; }
+.term .w { color: #F175D2; font-weight: 700; }
+.term .n { color: #52CFDA; }
+.term .cm { color: var(--term-dim); font-style: italic; }
+
+/* ── код на «бумаге» ── */
+pre.code {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 10px;
+  padding: clamp(.9rem, 1.8vw, 1.3rem) clamp(1rem, 2vw, 1.4rem); margin: 0;
+  font-size: clamp(.8rem, 1.2vw, 1.05rem); line-height: 1.6; overflow-x: auto;
+}
+pre.code .k { color: var(--accent); font-weight: 700; }
+pre.code .s { color: var(--ok); }
+pre.code .pp { color: var(--note); }
+pre.code .cm { color: var(--ink-faint); font-style: italic; }
+pre.code .hl { background: var(--accent-dim); border-radius: 3px; padding: 0 .15em; }
+
+/* ── сетки ── */
+.cols { display: grid; gap: clamp(.8rem, 1.6vw, 1.4rem); }
+.cols.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+.cols.three { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.panel {
+  background: var(--paper-2); border: 1px solid var(--rail); border-radius: 12px;
+  padding: clamp(.9rem, 1.7vw, 1.3rem); display: flex; flex-direction: column; gap: .5rem;
+}
+.panel h3 { font-size: 1.12em; }
+.panel p { margin: 0; color: var(--ink-soft); font-size: .95em; }
+.panel ul { margin: 0; padding-left: 1.1em; color: var(--ink-soft); font-size: .95em; }
+.panel li + li { margin-top: .3em; }
+
+/* один выделенный блок, а не «всё карточки» */
+.pin { background: var(--accent-dim); border-color: transparent; }
+.pin h3 { color: var(--accent); }
+.pin p, .pin ul { color: var(--ink); }
+
+/* ── таблица команд ── */
+table { border-collapse: collapse; width: 100%; font-size: clamp(.82rem, 1.15vw, 1rem); }
+th, td { text-align: left; padding: .42em .8em .42em 0; border-bottom: 1px solid var(--rail); vertical-align: baseline; }
+th { color: var(--ink-faint); font-weight: 600; font-size: .8em; text-transform: uppercase; letter-spacing: .08em; }
+td.cmd { font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--accent); white-space: nowrap; }
+td.dsc { color: var(--ink-soft); }
+.table-scroll { overflow-x: auto; }
+
+/* ── таймлайн стандартов: порядок здесь несёт смысл ── */
+.timeline { display: flex; gap: 0; overflow-x: auto; padding-bottom: .4rem; }
+.tl-step { flex: 1 0 auto; min-width: 108px; padding: 0 .75rem; border-left: 2px solid var(--rail); }
+.tl-step:first-child { border-left-color: var(--accent); }
+.tl-step .y { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 1.05em; }
+.tl-step .what { color: var(--ink-soft); font-size: .85em; display: block; margin-top: .2em; }
+.tl-step.now { border-left-color: var(--accent); }
+.tl-step.now .y { color: var(--accent); }
+
+/* ── конвейер сборки: настоящая последовательность, порядок обязателен ── */
+.pipe { display: flex; align-items: stretch; gap: .3rem; overflow-x: auto; padding-bottom: .4rem; }
+.node {
+  flex: 0 0 auto; min-width: 132px; display: flex; flex-direction: column; gap: .1rem;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: clamp(.55rem, 1.1vw, .85rem) clamp(.6rem, 1.2vw, 1rem);
+}
+.node .fn { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: clamp(.82rem, 1.2vw, 1.02rem); }
+.node .fd { font-size: .76em; color: var(--ink-faint); line-height: 1.35; }
+.node.start .fn { color: var(--ink); }
+.node.done { background: var(--accent-dim); border-color: transparent; }
+.node.done .fn { color: var(--accent); }
+.node.done .fd { color: var(--ink-soft); }
+.step {
+  flex: 0 0 auto; min-width: 104px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .05rem; padding: 0 .25rem;
+}
+.step .tool { font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); text-align: center; }
+.step .glyph { color: var(--ink-faint); font-size: 1.15em; line-height: 1; }
+.step .flag { font-family: "JetBrains Mono", monospace; font-size: .72em; color: var(--ink-faint); }
+
+/* ── повестка: пять смысловых групп, порядок несёт смысл ── */
+.plan { display: flex; flex-direction: column; gap: clamp(.5rem, 1.4vh, 1.05rem); }
+.phase {
+  display: grid; grid-template-columns: minmax(148px, 215px) 1fr;
+  gap: clamp(.5rem, 1.6vw, 1.4rem); align-items: start;
+  padding-left: clamp(.7rem, 1.4vw, 1.15rem);
+  border-left: 2px solid var(--rail);
+}
+.phase.focus { border-left-color: var(--accent); }
+.phase-head { display: flex; align-items: baseline; }
+.phase-name {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(.95rem, 1.5vw, 1.28rem); letter-spacing: -.015em; line-height: 1.15;
+}
+.phase.focus .phase-name { color: var(--accent); }
+.phase-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.phase-items li { display: flex; align-items: baseline; gap: .9rem; padding: .24em 0; }
+.phase-items li + li { border-top: 1px solid var(--rail); }
+.phase-items .pt { flex: 1; }
+.phase-items .pd {
+  font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+@media (max-width: 660px) { .phase { grid-template-columns: 1fr; gap: .2rem; } }
+
+/* ── титул ── */
+.hero-num {
+  font-family: "JetBrains Mono", monospace; color: var(--accent); font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase; font-size: .82em;
+}
+h1 { font-size: clamp(2.4rem, 7vw, 5.4rem); }
+.hero-line { height: 2px; background: var(--accent); width: 84px; }
+
+/* ── подвал ── */
+.bar {
+  position: fixed; inset: auto 0 0 0; z-index: 30;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .5rem clamp(.7rem, 3vw, 1.6rem);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(8px); border-top: 1px solid var(--rail);
+  font-family: "JetBrains Mono", monospace; font-size: .78rem;
+}
+.bar .spacer { flex: 1; }
+button {
+  font-family: "JetBrains Mono", monospace; font-size: .78rem; cursor: pointer;
+  background: transparent; color: var(--ink-soft); border: 1px solid var(--rail);
+  border-radius: 7px; padding: .3em .7em;
+}
+button:hover { color: var(--accent); border-color: var(--accent); }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.counter { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.counter b { color: var(--ink); }
+
+/* ── заметки докладчика ── */
+#notes {
+  position: fixed; inset: auto 0 0 0; z-index: 35;
+  background: var(--term-bg); color: var(--term-fg);
+  border-top: 2px solid var(--accent);
+  padding: 1rem clamp(.8rem, 3vw, 1.8rem) 3.1rem;
+  max-height: 52svh; overflow-y: auto;
+  font-size: clamp(.8rem, 1.1vw, .95rem); line-height: 1.55;
+}
+#notes h4 {
+  margin: 0 0 .5rem; font-family: "JetBrains Mono", monospace; font-size: .72rem;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+#notes ul { margin: 0; padding-left: 1.15em; }
+#notes li + li { margin-top: .35em; }
+#notes code { color: #F175D2; }
+#notes-time { color: var(--term-dim); letter-spacing: .08em; }
+
+kbd {
+  border: 1px solid var(--rail); border-bottom-width: 2px; border-radius: 5px;
+  padding: .05em .4em; font-size: .85em; color: var(--ink-soft);
+}
+.hint { color: var(--ink-faint); font-size: .9em; }
+strong { color: var(--ink); font-weight: 600; }
+.big { font-size: clamp(1.1rem, 1.9vw, 1.45rem); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* ══ seminar 2: вопросы, раскрытие ответов, задачи, таймер ══ */
+
+/* ответ скрыт, но место под него занято — слайд не прыгает при раскрытии */
+.reveal { position: relative; border-radius: 12px; min-height: 3.2rem; }
+.reveal:not(.shown) { cursor: pointer; }
+.reveal:not(.shown) > * { visibility: hidden; }
+.reveal:not(.shown)::after {
+  content: attr(data-label);
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--rail); border-radius: 12px; background: var(--paper);
+  font-family: "JetBrains Mono", monospace; font-size: .82em; letter-spacing: .04em; color: var(--ink-faint);
+}
+.reveal:not(.shown):hover::after,
+.reveal:not(.shown):focus-visible::after { border-color: var(--accent); color: var(--accent); }
+.reveal:focus-visible { outline: none; }
+.reveal.shown { animation: rv .2s ease-out; }
+@keyframes rv { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* варианты ответа: зал показывает номер на пальцах */
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .55rem; }
+.opt {
+  display: flex; gap: .7rem; align-items: baseline;
+  border: 1px solid var(--rail); border-radius: 10px; background: var(--paper-2);
+  padding: .5rem .85rem; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem);
+  white-space: pre; overflow-x: auto; transition: background .2s, border-color .2s, opacity .2s;
+}
+.opt .n { font-weight: 700; color: var(--accent); flex: 0 0 auto; }
+.slide.answered .opt { opacity: .45; }
+.slide.answered .opt.correct { opacity: 1; background: var(--accent-dim); border-color: var(--accent); }
+
+.ask {
+  font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-weight: 700;
+  font-size: clamp(1.05rem, 1.9vw, 1.45rem); letter-spacing: -.01em;
+}
+.label {
+  font-family: "JetBrains Mono", monospace; font-size: .68em; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint);
+}
+.stack { display: flex; flex-direction: column; gap: .45rem; min-width: 0; }
+
+/* ответ: вывод программы + объяснение */
+.answer { display: flex; flex-direction: column; gap: .6rem; }
+.answer .why { background: var(--accent-dim); border-radius: 10px; padding: .75rem 1rem; color: var(--ink); font-size: .96em; }
+.answer .why p + p { margin-top: .45rem; }
+
+/* задачи */
+.io { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .7rem; }
+.lvl {
+  display: inline-block; font-family: "JetBrains Mono", monospace; font-size: .66em; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; border: 1px solid currentColor;
+  border-radius: 999px; padding: .08em .6em; vertical-align: .2em; margin-left: .45em;
+}
+.lvl.l1 { color: var(--ok); }
+.lvl.l2 { color: var(--note); }
+.lvl.l3 { color: var(--accent); }
+.tasklist { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .7rem; }
+.tasklist .panel h3 { font-size: 1em; }
+pre.code.small, .term.small { font-size: clamp(.72rem, 1vw, .9rem); line-height: 1.5; }
+pre.code .num { color: var(--note); }
+
+/* таймер в подвале */
+#timer { font-variant-numeric: tabular-nums; }
+#timer.running { color: var(--accent); border-color: var(--accent); }
+#timer.done { color: var(--err); border-color: var(--err); }
+.keys-hint { color: var(--ink-faint); font-size: .72rem; }
+@media (max-width: 760px) { .keys-hint { display: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal.shown { animation: none; } }
+
+/* подпись под фрагментом: откуда он */
+.src { font-family: "JetBrains Mono", monospace; font-size: .68em; color: var(--ink-faint); line-height: 1.4; }
+.src code { font-size: 1em; }
+
+/* входной буфер: какие символы кто прочитал */
+.buf { display: flex; flex-wrap: wrap; gap: 4px; font-family: "JetBrains Mono", monospace; font-size: clamp(.8rem, 1.15vw, 1rem); }
+.buf .ch { border: 1px solid var(--rail); border-radius: 6px; padding: .15em .5em; background: var(--paper-2); min-width: 1.7em; text-align: center; }
+.buf .ch.nl { color: var(--note); font-weight: 700; }
+.buf .ch.a, .buf-legend i.a { background: var(--accent-dim); border-color: var(--accent); }
+.buf .ch.g, .buf-legend i.g { background: color-mix(in srgb, var(--note) 20%, var(--paper)); border-color: var(--note); }
+.buf .ch.rest { opacity: .45; border-style: dashed; }
+.buf-legend { display: flex; gap: .4rem 1rem; flex-wrap: wrap; font-size: .8em; color: var(--ink-soft); }
+.buf-legend i { display: inline-block; width: .95em; height: .95em; border: 1px solid var(--rail); border-radius: 3px; vertical-align: -.12em; margin-right: .35em; }
+.buf-legend i.rest { border-style: dashed; opacity: .6; }
+.buf .ch.w, .buf-legend i.w { background: color-mix(in srgb, var(--ok) 20%, var(--paper)); border-color: var(--ok); }
+
+/* полные программы: чем длиннее, тем мельче; и страховка от выхода за экран */
+pre.code.xsmall { font-size: clamp(.62rem, .85vw, .8rem); line-height: 1.42; }
+pre.code { max-height: 74svh; overflow: auto; }
+
+/* текст на всю ширину */
+.slide .sub { max-width: none; }
+body .doc { max-width: 1100px; }
+body .doc .lede { max-width: none; }
+
+/* шире на больших экранах, таблицы без лишней прокрутки */
+.wrap { max-width: min(1680px, 94vw); }
+.cols > * { min-width: 0; }
+.slide table td.cmd { white-space: normal; }
+
+.bar button.on { color: var(--accent); border-color: var(--accent); }
+
+/* режимы vim: Normal в центре, остальные вокруг */
+.modes { display: grid; grid-template-columns: 1fr auto 1.15fr auto 1fr; gap: .6rem .5rem; align-items: center; }
+.mode { border: 1px solid var(--rail); border-radius: 12px; background: var(--paper-2); padding: .65rem .9rem; display: flex; flex-direction: column; gap: .15rem; }
+.mode b { font-family: "Bricolage Grotesque", ui-sans-serif, sans-serif; font-size: 1.12em; }
+.mode small { color: var(--ink-soft); font-size: .86em; line-height: 1.35; }
+.mode.main { grid-column: 3; grid-row: 1 / span 2; align-self: stretch; justify-content: center; text-align: center; background: var(--accent-dim); border-color: transparent; }
+.mode.main b { color: var(--accent); font-size: 1.6em; }
+.edge { display: flex; flex-direction: column; align-items: center; gap: .15rem; font-family: "JetBrains Mono", monospace; font-size: .78em; color: var(--ink-faint); white-space: nowrap; }
+.edge .to { color: var(--accent); font-weight: 700; }
+@media (max-width: 760px) { .modes { grid-template-columns: 1fr; } .mode.main { grid-column: auto; grid-row: auto; } .edge { flex-direction: row; gap: .8rem; } }
+.keys td.cmd { white-space: nowrap; }
+.vis { color: var(--err); }
+</style>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+<!-- 1 -->
+<section class="slide is-active" data-sec="Семинар 2" data-time="1 мин" data-notes="">
+  <div class="wrap">
+    <div class="hero-num">C++ · 1 курс · семинар 02</div>
+<h1>Контейнеры, алгоритмы<br>и редакторы</h1>
+<div class="hero-line"></div>
+<p class="sub big">Первая часть — vector, string и sort: проверяем, что уже умеем, и разбираем места, где легко ошибиться. Вторая — less, vim и VS Code: учимся делать привычные вещи в несколько раз быстрее.</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-sec="Задача на входе" data-time="9 мин" data-timer="480" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача на входе</span></div><h2>Сначала задача, потом объяснения</h2>
+<p class="sub">8 минут. Задача такая.</p>
+<div class="cols two">
+  <div class="panel pin">
+    <h3>Задача</h3>
+    <p>Программа читает с клавиатуры целые числа — сколько их, заранее неизвестно — и печатает их в одну строку по возрастанию.</p>
+    <p>Ввод заканчивается сочетанием <kbd>Ctrl</kbd>+<kbd>D</kbd>.</p>
+  </div>
+  <div class="stack">
+    <div class="term "><span class="p">$</span> <span class="c">echo "5 3 9 1 3" | ./sorter</span>
+<span class="o">1 3 3 5 9</span></div>
+    <div class="reveal" data-label="бонус для тех, кто уже сделал  →"><div class="panel"><h3>Бонус: по убыванию и без повторов</h3><div class="term small"><span class="p">$</span> <span class="c">echo "5 3 9 1 3" | ./sorter</span>
+<span class="o">9 5 3 1</span></div></div></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-sec="Задача на входе" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача на входе</span></div><h2>Разбор: одна программа — вся сегодняшняя тема</h2>
+<div class="cols two">
+  <div class="reveal" data-label="решение  →"><pre class="code small"><span class="pp">#include &lt;algorithm&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; numbers;
+    <span class="k">int</span> x;
+    <span class="k">while</span> (std::cin &gt;&gt; x) {
+        numbers.push_back(x);
+    }
+
+    std::sort(numbers.begin(), numbers.end());
+
+    <span class="k">for</span> (<span class="k">int</span> value : numbers) {
+        std::cout &lt;&lt; value &lt;&lt; <span class="s">' '</span>;
+    }
+    std::cout &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div>
+  <div class="reveal" data-label="бонус: по убыванию без повторов  →"><div class="stack"><pre class="code small"><span class="pp">#include &lt;algorithm&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; numbers;
+    <span class="k">int</span> x;
+    <span class="k">while</span> (std::cin &gt;&gt; x) {
+        numbers.push_back(x);
+    }
+
+    std::sort(numbers.rbegin(), numbers.rend());
+
+    <span class="k">for</span> (std::size_t i = <span class="num">0</span>; i &lt; numbers.size(); ++i) {
+        <span class="k">if</span> (i == <span class="num">0</span> || numbers[i] != numbers[i - <span class="num">1</span>]) {
+            std::cout &lt;&lt; numbers[i] &lt;&lt; <span class="s">' '</span>;
+        }
+    }
+    std::cout &lt;&lt; <span class="s">'\n'</span>;
+}</pre><p class="hint">После сортировки одинаковые числа стоят рядом, поэтому повтор — это «равен предыдущему».</p></div></div>
+</div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-sec="Задача на входе" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача на входе</span></div><h2>Бонус стандартными средствами: компаратор</h2>
+<div class="cols two">
+  <div class="reveal" data-label="решение с компаратором и unique  →"><div class="stack"><pre class="code small"><span class="pp">#include &lt;algorithm&gt;</span>
+<span class="pp">#include &lt;functional&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; numbers;
+    <span class="k">int</span> x;
+    <span class="k">while</span> (std::cin &gt;&gt; x) {
+        numbers.push_back(x);
+    }
+
+    std::sort(numbers.begin(), numbers.end(), std::greater&lt;<span class="k">int</span>&gt;());
+    numbers.erase(std::unique(numbers.begin(), numbers.end()), numbers.end());
+
+    <span class="k">for</span> (<span class="k">int</span> value : numbers) {
+        std::cout &lt;&lt; value &lt;&lt; <span class="s">' '</span>;
+    }
+    std::cout &lt;&lt; <span class="s">'\n'</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">echo "5 3 9 1 3" | ./tasks/t00c_greater_unique</span>
+<span class="o">9 5 3 1</span></div></div></div>
+  <div class="panel pin">
+    <h3>Компаратор</h3>
+    <p>Третий аргумент <code>sort</code> — функция сравнения. Она возвращает <code>true</code>, если <code>a</code> должен стоять <strong>раньше</strong> <code>b</code>. <code>std::greater&lt;int&gt;()</code> из <code>&lt;functional&gt;</code> сравнивает через <code>&gt;</code>, поэтому большие числа идут первыми.</p>
+    <p>Сравнение должно быть <strong>строгим</strong>: <code>a &gt; b</code>, а не <code>a &gt;= b</code>. С нестрогим сравнением — undefined behavior.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-sec="Задача на входе" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Задача на входе</span></div><h2>unique ничего не удаляет</h2>
+<div class="cols two">
+  <div class="stack"><pre class="code "><span class="pp">#include &lt;algorithm&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; v = {<span class="num">9</span>, <span class="num">5</span>, <span class="num">3</span>, <span class="num">3</span>, <span class="num">1</span>};
+    std::cout &lt;&lt; <span class="s">"до unique:   "</span>; <span class="k">for</span> (<span class="k">int</span> x : v) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+
+    std::vector&lt;<span class="k">int</span>&gt;::iterator last = std::unique(v.begin(), v.end());
+    std::cout &lt;&lt; <span class="s">"после unique:"</span>; <span class="k">for</span> (<span class="k">int</span> x : v) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+
+    v.erase(last, v.end());
+    std::cout &lt;&lt; <span class="s">"после erase: "</span>; <span class="k">for</span> (<span class="k">int</span> x : v) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./quiz/q25_unique</span>
+<span class="o">до unique:    9 5 3 3 1</span>
+<span class="o">после unique: 9 5 3 1 1</span>
+<span class="o">после erase:  9 5 3 1</span></div></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Что делает unique</h3>
+      <p><code>std::unique</code> убирает <strong>подряд идущие</strong> повторы: сдвигает уникальные элементы в начало и возвращает позицию нового конца. Размер вектора не меняется — в выводе после <code>unique</code> всё ещё пять чисел. Что осталось в хвосте, стандарт не гарантирует, опираться на это нельзя.</p>
+    </div>
+    <div class="panel">
+      <h3>Что делает erase</h3>
+      <p><code>v.erase(last, v.end())</code> удаляет элементы от <code>last</code> до конца — вот теперь в векторе четыре числа. Связка <code>erase(unique(...), end())</code> — стандартная идиома.</p>
+    </div>
+    <p class="hint">Повторы должны стоять рядом, поэтому перед <code>unique</code> вектор сортируют.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-sec="Конструкторы" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Конструкторы</span></div><h2>Конструкторы vector</h2>
+<p class="sub">Любая запись создания вектора — это вызов одного из его конструкторов. Какой именно, компилятор выбирает по аргументам, как среди перегруженных функций.</p>
+<div class="cols two">
+  <div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; a;
+    std::vector&lt;<span class="k">int</span>&gt; b(<span class="num">3</span>);
+    std::vector&lt;<span class="k">int</span>&gt; c(<span class="num">3</span>, <span class="num">7</span>);
+    std::vector&lt;<span class="k">int</span>&gt; d = {<span class="num">5</span>, <span class="num">3</span>, <span class="num">9</span>, <span class="num">1</span>};
+    std::vector&lt;<span class="k">int</span>&gt; e(d);
+    std::vector&lt;<span class="k">int</span>&gt; f(d.begin(), d.begin() + <span class="num">2</span>);
+
+    std::cout &lt;&lt; <span class="s">"a:"</span>; <span class="k">for</span> (<span class="k">int</span> x : a) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; <span class="s">"b:"</span>; <span class="k">for</span> (<span class="k">int</span> x : b) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; <span class="s">"c:"</span>; <span class="k">for</span> (<span class="k">int</span> x : c) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; <span class="s">"d:"</span>; <span class="k">for</span> (<span class="k">int</span> x : d) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; <span class="s">"e:"</span>; <span class="k">for</span> (<span class="k">int</span> x : e) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; <span class="s">"f:"</span>; <span class="k">for</span> (<span class="k">int</span> x : f) { std::cout &lt;&lt; <span class="s">' '</span> &lt;&lt; x; } std::cout &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div>
+  <div class="stack">
+    <div class="table-scroll">
+      <table class="keys">
+        <tr><th>Запись</th><th>Конструктор</th><th>Что получится</th></tr>
+        <tr><td class="cmd">a</td><td class="dsc">по умолчанию</td><td class="dsc">пустой вектор</td></tr>
+        <tr><td class="cmd">b(3)</td><td class="dsc"><code>vector(count)</code></td><td class="dsc">3 элемента, инициализированных по умолчанию: для <code>int</code> это 0, для <code>std::string</code> — пустая строка</td></tr>
+        <tr><td class="cmd">c(3, 7)</td><td class="dsc"><code>vector(count, value)</code></td><td class="dsc">3 копии значения 7</td></tr>
+        <tr><td class="cmd">d = {5, 3, 9, 1}</td><td class="dsc">из <code>std::initializer_list</code></td><td class="dsc">ровно перечисленные элементы</td></tr>
+        <tr><td class="cmd">e(d)</td><td class="dsc">копирования</td><td class="dsc">независимая копия <code>d</code>; то же, что <code>e = d</code></td></tr>
+        <tr><td class="cmd">f(d.begin(), d.begin() + 2)</td><td class="dsc">из диапазона итераторов</td><td class="dsc">элементы полуинтервала <code>[first, last)</code>: номера 0 и 1</td></tr>
+      </table>
+    </div>
+    <div class="term small"><span class="p">$</span> <span class="c">./quiz/q23_ctors</span>
+<span class="o">a:</span>
+<span class="o">b: 0 0 0</span>
+<span class="o">c: 7 7 7</span>
+<span class="o">d: 5 3 9 1</span>
+<span class="o">e: 5 3 9 1</span>
+<span class="o">f: 5 3</span></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; a(<span class="num">3</span>, <span class="num">7</span>);
+    std::vector&lt;<span class="k">int</span>&gt; b{<span class="num">3</span>, <span class="num">7</span>};
+
+    std::cout &lt;&lt; a.size() &lt;&lt; <span class="s">' '</span> &lt;&lt; b.size() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt correct"><span class="n">1</span><span>3 2</span></div><div class="opt"><span class="n">2</span><span>3 3</span></div><div class="opt"><span class="n">3</span><span>2 2</span></div><div class="opt"><span class="n">4</span><span>2 3</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q03_parens</span>
+<span class="o">3 2</span></div><div class="why"><p><code>a(3, 7)</code> — круглые скобки: вызывается конструктор <code>vector(count, value)</code>, три копии семёрки.</p><p><code>b{3, 7}</code> — фигурные скобки: если у типа есть конструктор от <code>std::initializer_list</code> и элементы списка к нему подходят, выбирается именно он. Получаем два элемента: 3 и 7.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-sec="Конструкторы" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Конструкторы</span></div><h2>Почему фигурные скобки ведут себя иначе</h2>
+<div class="cols two">
+  <div class="stack">
+    <pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; x(<span class="num">3</span>);
+    std::vector&lt;<span class="k">int</span>&gt; y{<span class="num">3</span>};
+    std::vector&lt;std::string&gt; s{<span class="num">3</span>};
+
+    std::cout &lt;&lt; x.size() &lt;&lt; <span class="s">' '</span> &lt;&lt; y.size() &lt;&lt; <span class="s">' '</span> &lt;&lt; y[<span class="num">0</span>] &lt;&lt; <span class="s">' '</span> &lt;&lt; s.size() &lt;&lt; <span class="s">'\n'</span>;
+}</pre>
+    <div class="term small"><span class="p">$</span> <span class="c">./quiz/q22_braces</span>
+<span class="o">3 1 3 3</span></div>
+    <p class="hint">Печатаются <code>x.size()</code>, <code>y.size()</code>, <code>y[0]</code> и <code>s.size()</code>.</p>
+  </div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Правило</h3>
+      <p>При инициализации фигурными скобками компилятор <strong>сначала</strong> пробует конструкторы от <code>std::initializer_list</code>. Если элементы списка подходят по типу, выбирается такой конструктор. Если нет — обычные конструкторы, как с круглыми скобками.</p>
+    </div>
+    <div class="table-scroll">
+      <table class="keys">
+        <tr><td class="cmd">x(3)</td><td class="dsc"><code>vector(count)</code>: три нуля</td></tr>
+        <tr><td class="cmd">y{3}</td><td class="dsc"><code>initializer_list&lt;int&gt;</code>: один элемент, равный 3</td></tr>
+        <tr><td class="cmd">s{3}</td><td class="dsc">из <code>3</code> нельзя сделать <code>std::string</code>, список не подходит — вызывается <code>vector(count)</code>: три пустые строки</td></tr>
+      </table>
+    </div>
+    <p class="hint">Практический вывод: нужен размер — круглые скобки, нужно перечислить элементы — фигурные.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; a = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>};
+    std::vector&lt;<span class="k">int</span>&gt; b = a;
+    b[<span class="num">0</span>] = <span class="num">100</span>;
+
+    std::cout &lt;&lt; a[<span class="num">0</span>] &lt;&lt; <span class="s">' '</span> &lt;&lt; b[<span class="num">0</span>] &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt"><span class="n">1</span><span>100 100</span></div><div class="opt correct"><span class="n">2</span><span>1 100</span></div><div class="opt"><span class="n">3</span><span>1 1</span></div><div class="opt"><span class="n">4</span><span>ошибка компиляции</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q21_copy</span>
+<span class="o">1 100</span></div><div class="why"><p><code>b = a</code> вызывает конструктор копирования: у <code>b</code> свои копии элементов. Изменение <code>b[0]</code> на <code>a</code> не влияет.</p><p>В Python или Java после такого присваивания обе переменные были бы одним и тем же списком. В C++ вектор ведёт себя как значение.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-sec="Доступ" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Доступ</span></div><h2>Взять элемент и узнать размер</h2>
+<div class="table-scroll">
+  <table>
+    <tr><th>Операция</th><th>Что делает</th></tr>
+    <tr><td class="cmd">v[i]</td><td class="dsc">элемент номер <code>i</code>; <strong>границы не проверяются</strong>, выход за них — undefined behavior</td></tr>
+    <tr><td class="cmd">v.at(i)</td><td class="dsc">то же, но с проверкой: при выходе за границы бросает исключение <code>std::out_of_range</code></td></tr>
+    <tr><td class="cmd">v.front()</td><td class="dsc">первый элемент: возвращает <code>*v.begin()</code>, границы не проверяет — как <code>v[0]</code></td></tr>
+    <tr><td class="cmd">v.back()</td><td class="dsc">последний элемент: <code>*(v.end() - 1)</code>, границы не проверяет — как <code>v[v.size() - 1]</code></td></tr>
+    <tr><td class="cmd">v.size()</td><td class="dsc">сколько сейчас элементов</td></tr>
+    <tr><td class="cmd">v.empty()</td><td class="dsc">пустой ли вектор — короче и понятнее, чем <code>v.size() == 0</code></td></tr>
+  </table>
+</div>
+<div class="cols two">
+  <div class="panel pin">
+    <h3>Нумерация с нуля</h3>
+    <p>У вектора из трёх элементов индексы <strong>0, 1, 2</strong>. Индекса 3 там нет, и квадратные скобки об этом не предупредят.</p>
+  </div>
+  <div class="panel">
+    <h3>Пустой вектор</h3>
+    <p><code>front()</code> и <code>back()</code> устроены как <code>[]</code>, а не как <code>at()</code>: проверки нет. У пустого вектора <code>front()</code>, <code>back()</code> и <code>v[0]</code> — undefined behavior, поэтому сначала проверяем <code>empty()</code>.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что произойдёт?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; v = {<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>};
+
+    std::cout &lt;&lt; v.at(<span class="num">1</span>) &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; v.at(<span class="num">10</span>) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt"><span class="n">1</span><span>20, затем 0</span></div><div class="opt"><span class="n">2</span><span>20, затем случайное число</span></div><div class="opt correct"><span class="n">3</span><span>20, затем исключение и аварийное завершение</span></div><div class="opt"><span class="n">4</span><span>не скомпилируется</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q05_at</span>
+<span class="o">20</span>
+<span class="e">terminate called after throwing an instance of 'std::out_of_range'</span>
+<span class="e">  what():  vector::_M_range_check: __n (which is 10) &gt;= this-&gt;size() (which is 3)</span></div><div class="why"><p><code>at(10)</code> проверяет индекс и бросает исключение <code>std::out_of_range</code>. Его никто не перехватывает, поэтому вызывается <code>std::terminate</code>, и программа аварийно завершается — отсюда сообщение с индексом <code>10</code> и размером <code>3</code>.</p><p>С <code>v[10]</code> проверки нет: это undefined behavior, результат не гарантирован.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-sec="Изменение" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Изменение</span></div><h2>Добавить, убрать, изменить размер</h2>
+<div class="cols two">
+  <pre class="code ">std::vector&lt;<span class="k">int</span>&gt; v = {<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>};
+
+v.push_back(<span class="num">4</span>);          <span class="cm">// 1 2 3 4</span>
+v.pop_back();            <span class="cm">// 1 2 3</span>
+v.resize(<span class="num">5</span>);             <span class="cm">// 1 2 3 0 0</span>
+v.insert(v.begin(), <span class="num">7</span>);  <span class="cm">// 7 1 2 3 0 0</span>
+v.erase(v.begin() + <span class="num">1</span>);  <span class="cm">// 7 2 3 0 0</span>
+v.clear();               <span class="cm">// пусто</span></pre>
+  <div class="stack">
+    <div class="panel pin">
+      <h3><code>push_back</code> — главная команда сегодня</h3>
+      <p>Добавляет элемент в конец. Так вектор наполняется тем, что прочитали с клавиатуры.</p>
+    </div>
+    <div class="panel">
+      <h3><code>resize</code></h3>
+      <p>Делает размер ровно таким. Если растёт — новые элементы инициализируются по умолчанию (для <code>int</code> это 0) или значением из второго аргумента. Если уменьшается — хвост удаляется.</p>
+    </div>
+    <div class="panel">
+      <h3><code>insert</code> и <code>erase</code></h3>
+      <p><code>v.begin()</code> — итератор на первый элемент, <code>v.begin() + i</code> — итератор на элемент номер <code>i</code>. Вставлять и удалять в середине можно, но всё, что правее, сдвигается.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-sec="Обход" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Обход</span></div><h2>Пройти по всем элементам</h2>
+<div class="cols two">
+  <div class="stack">
+    <span class="label">обычно нужен первый, второй — когда важен номер</span>
+    <pre class="code "><span class="k">for</span> (<span class="k">int</span> x : v) {
+    std::cout &lt;&lt; x &lt;&lt; <span class="s">' '</span>;
+}
+
+<span class="k">for</span> (std::size_t i = <span class="num">0</span>; i &lt; v.size(); ++i) {
+    std::cout &lt;&lt; i &lt;&lt; <span class="s">": "</span> &lt;&lt; v[i] &lt;&lt; <span class="s">'\n'</span>;
+}</pre>
+  </div>
+  <div class="stack">
+    <div class="panel pin"><h3>Цикл по элементам</h3><p>Цикл с двоеточием читается как «для каждого <code>x</code> из <code>v</code>». Нужен, когда важны только значения — а это почти всегда.</p></div>
+    <div class="panel"><h3>Цикл по индексу</h3><p>Нужен, когда важен сам номер элемента. Счётчик — <code>std::size_t</code>: это тот же тип, что возвращает <code>size()</code>.</p></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two">
+  <div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; v;
+
+    std::cout &lt;&lt; v.size() &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; v.size() - <span class="num">1</span> &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div>
+  <div class="stack">
+    <span class="label">варианты — покажите номер на пальцах</span>
+    <div class="options"><div class="opt"><span class="n">1</span><span>0
+-1</span></div><div class="opt"><span class="n">2</span><span>0
+0</span></div><div class="opt"><span class="n">3</span><span>0
+18446744073709551615</span></div><div class="opt"><span class="n">4</span><span>ошибка компиляции</span></div></div>
+    <p class="hint">Ответ — на следующем слайде.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section class="slide" data-sec="Ответ" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Ответ</span></div><h2>Ответ: 18446744073709551615</h2>
+<div class="cols two">
+  <div class="stack">
+    <span class="label">правильный вариант 3</span>
+    <div class="term small"><span class="p">$</span> <span class="c">./quiz/q27_size_minus_one</span>
+<span class="o">0</span>
+<span class="o">18446744073709551615</span></div>
+    <div class="panel pin">
+      <h3>Почему</h3>
+      <p><code>size()</code> возвращает <code>std::size_t</code> — беззнаковый тип, отрицательных значений в нём нет. Беззнаковая арифметика идёт по модулю 2<sup>64</sup> (на 64-битных системах), поэтому <code>0 − 1</code> — это 2<sup>64</sup> − 1 = 18446744073709551615.</p>
+    </div>
+    <div class="panel">
+      <h3>Чем это опасно</h3>
+      <p>Цикл <code>for (std::size_t i = 0; i &lt; v.size() - 1; ++i)</code> на пустом векторе проверяет <code>0 &lt; 18446744073709551615</code> — условие истинно, и цикл обращается к <code>v[0]</code> пустого вектора. Это undefined behavior.</p>
+    </div>
+  </div>
+  <div class="stack">
+    <span class="label">как написать безопасно</span>
+    <pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; v;
+
+    <span class="k">for</span> (std::size_t i = <span class="num">0</span>; i + <span class="num">1</span> &lt; v.size(); ++i) {
+        std::cout &lt;&lt; v[i] &lt;&lt; <span class="s">' '</span>;
+    }
+
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">0</span>; i &lt; std::ssize(v) - <span class="num">1</span>; ++i) {
+        std::cout &lt;&lt; v[i] &lt;&lt; <span class="s">' '</span>;
+    }
+
+    std::cout &lt;&lt; <span class="s">"оба цикла не выполнились ни разу\n"</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./quiz/q28_safe_loops</span>
+<span class="o">оба цикла не выполнились ни разу</span></div>
+    <p class="hint">Первый вариант не вычитает из <code>size()</code>, а переносит единицу в другую часть неравенства. Второй берёт размер со знаком: <code>std::ssize(v) - 1</code> для пустого вектора честно равно <code>-1</code>. Нужен <code>-std=c++20</code>.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section class="slide" data-sec="Строки" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Строки</span></div><h2>std::string ведёт себя как обычное значение</h2>
+<div class="cols two">
+  <div class="stack">
+    <pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string s = <span class="s">"hello"</span>;
+    s += <span class="s">", world"</span>;
+
+    std::cout &lt;&lt; s &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; s.size() &lt;&lt; <span class="s">' '</span> &lt;&lt; s[<span class="num">0</span>] &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; (s == <span class="s">"hello, world"</span>) &lt;&lt; <span class="s">'\n'</span>;
+}</pre>
+    <div class="term small"><span class="p">$</span> <span class="c">./quiz/q26_string</span>
+<span class="o">hello, world</span>
+<span class="o">12 h</span>
+<span class="o">1</span></div>
+  </div>
+  <div class="stack">
+    <div class="panel">
+      <h3>Что умеет</h3>
+      <p>Складывается через <code>+</code> и <code>+=</code>, сравнивается через <code>==</code> и <code>&lt;</code>, отдельный символ — <code>s[i]</code>, как у вектора. Растёт сама.</p>
+    </div>
+    <div class="panel pin">
+      <h3>Размер и индексы</h3>
+      <p><code>s.size()</code> — сколько символов в строке: у <code>hello, world</code> их 12, пробел и запятая тоже считаются. Нумерация с нуля, как у вектора: <code>s[0]</code> — это <code>h</code>.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 17 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string a = <span class="s">"10"</span>;
+    std::string b = <span class="s">"9"</span>;
+    std::string c = <span class="s">"Zebra"</span>;
+    std::string d = <span class="s">"apple"</span>;
+
+    std::cout &lt;&lt; (a &lt; b) &lt;&lt; <span class="s">' '</span> &lt;&lt; (c &lt; d) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt correct"><span class="n">1</span><span>1 1</span></div><div class="opt"><span class="n">2</span><span>0 0</span></div><div class="opt"><span class="n">3</span><span>0 1</span></div><div class="opt"><span class="n">4</span><span>1 0</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q12_compare</span>
+<span class="o">1 1</span></div><div class="why"><p>Сравнение даёт логическое значение, а <code>cout</code> печатает его как <code>1</code> — истина, и <code>0</code> — ложь. Обе проверки истинны.</p><p>Строки сравниваются посимвольно слева направо, как слова в словаре, — но по кодам символов.</p><p><code>"10" &lt; "9"</code>: первый символ <code>'1'</code> меньше <code>'9'</code>, дальше не смотрим.</p><p><code>"Zebra" &lt; "apple"</code>: код <code>'Z'</code> — 90, код <code>'a'</code> — 97. Все заглавные латинские «меньше» строчных.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 18 -->
+<section class="slide" data-sec="Поиск" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Поиск</span></div><h2>Кусочки строки и поиск</h2>
+<div class="table-scroll">
+  <table>
+    <tr><th>Вызов</th><th>Что возвращает</th></tr>
+    <tr><td class="cmd">s.substr(pos)</td><td class="dsc">кусок от позиции <code>pos</code> до конца</td></tr>
+    <tr><td class="cmd">s.substr(pos, len)</td><td class="dsc">кусок длиной <code>len</code>, начиная с <code>pos</code></td></tr>
+    <tr><td class="cmd">s.find(t)</td><td class="dsc">позицию первого вхождения <code>t</code> или <code>std::string::npos</code>, если не нашлось</td></tr>
+    <tr><td class="cmd">s.find(t, from)</td><td class="dsc">то же, но искать начиная с позиции <code>from</code></td></tr>
+  </table>
+</div>
+<div class="cols two">
+  <div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string s = <span class="s">"programming"</span>;
+    std::cout &lt;&lt; s.find(<span class="s">"gram"</span>) &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; s.find(<span class="s">"xyz"</span>) &lt;&lt; <span class="s">'\n'</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">./quiz/q15_npos</span>
+<span class="o">3</span>
+<span class="o">18446744073709551615</span></div></div>
+  <div class="panel pin">
+    <h3><code>npos</code> — это «не нашёл»</h3>
+    <p>Специальная константа — максимальное значение <code>size_t</code>. Проверять надо именно так: <code>if (s.find(t) != std::string::npos)</code>.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 19 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин · можно пропустить" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string s = <span class="s">"programming"</span>;
+    std::cout &lt;&lt; s.substr(<span class="num">3</span>, <span class="num">4</span>) &lt;&lt; <span class="s">' '</span> &lt;&lt; s.substr(<span class="num">7</span>) &lt;&lt; <span class="s">'\n'</span>;
+
+    <span class="k">if</span> (s.find(<span class="s">"pro"</span>)) {
+        std::cout &lt;&lt; <span class="s">"нашли\n"</span>;
+    } <span class="k">else</span> {
+        std::cout &lt;&lt; <span class="s">"не нашли\n"</span>;
+    }
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt"><span class="n">1</span><span>gram ming
+нашли</span></div><div class="opt correct"><span class="n">2</span><span>gram ming
+не нашли</span></div><div class="opt"><span class="n">3</span><span>ogra ming
+нашли</span></div><div class="opt"><span class="n">4</span><span>gram mming
+не нашли</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q14_substr_find</span>
+<span class="o">gram ming</span>
+<span class="o">не нашли</span></div><div class="why"><p><code>substr(3, 4)</code> — с позиции 3 четыре символа: <code>gram</code>. <code>substr(7)</code> — с позиции 7 до конца: <code>ming</code>.</p><p><code>find("pro")</code> нашёл в самом начале и вернул позицию <strong>0</strong>. В условии <code>if</code> число 0 приводится к <code>false</code>. Правильно: <code>!= std::string::npos</code>, а для начала строки есть <code>s.starts_with("pro")</code>.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 20 -->
+<section class="slide" data-sec="Правка строки" data-time="3 мин · можно пропустить" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Правка строки</span></div><h2>Вставить, заменить, удалить</h2>
+<div class="cols two">
+  <div class="stack">
+    <div class="table-scroll">
+      <table>
+        <tr><td class="cmd">s.insert(pos, t)</td><td class="dsc">вставить <code>t</code> перед позицией <code>pos</code></td></tr>
+        <tr><td class="cmd">s.replace(pos, len, t)</td><td class="dsc">заменить <code>len</code> символов с <code>pos</code> на <code>t</code></td></tr>
+        <tr><td class="cmd">s.erase(pos, len)</td><td class="dsc">удалить <code>len</code> символов с <code>pos</code></td></tr>
+        <tr><td class="cmd">s.starts_with(t)</td><td class="dsc">начинается ли с <code>t</code> (C++20)</td></tr>
+        <tr><td class="cmd">s.ends_with(t)</td><td class="dsc">заканчивается ли на <code>t</code> (C++20)</td></tr>
+      </table>
+    </div>
+    <span class="label">вопрос: что напечатает?</span>
+    <pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string s = <span class="s">"hello world"</span>;
+    s.insert(<span class="num">5</span>, <span class="s">","</span>);
+    s.replace(<span class="num">0</span>, <span class="num">5</span>, <span class="s">"bye"</span>);
+    s.erase(<span class="num">3</span>, <span class="num">1</span>);
+
+    std::cout &lt;&lt; s &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; s.starts_with(<span class="s">"bye"</span>) &lt;&lt; <span class="s">' '</span> &lt;&lt; s.ends_with(<span class="s">"!"</span>) &lt;&lt; <span class="s">'\n'</span>;
+}</pre>
+  </div>
+  <div class="stack">
+    <div class="options"><div class="opt correct"><span class="n">1</span><span>bye world
+1 0</span></div><div class="opt"><span class="n">2</span><span>bye, world
+1 0</span></div><div class="opt"><span class="n">3</span><span>byeworld
+1 0</span></div><div class="opt"><span class="n">4</span><span>bye world
+0 0</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q16_edit</span>
+<span class="o">bye world</span>
+<span class="o">1 0</span></div><div class="why"><p><code>insert(5, ",")</code> → <code>hello, world</code><br><code>replace(0, 5, "bye")</code> → <code>bye, world</code><br><code>erase(3, 1)</code> → <code>bye world</code></p><p><code>starts_with("bye")</code> — истина, печатается как <code>1</code>; <code>ends_with("!")</code> — ложь, печатается как <code>0</code>.</p></div></div></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 21 -->
+<section class="slide" data-sec="Алгоритмы" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Алгоритмы</span></div><h2>Готовое из &lt;algorithm&gt;</h2>
+<div class="table-scroll">
+  <table>
+    <tr><th>Вызов</th><th>Что делает</th><th>Для {5, 3, 9, 1, 3}</th></tr>
+    <tr><td class="cmd">std::sort(v.begin(), v.end())</td><td class="dsc">сортирует по возрастанию</td><td class="cmd">1 3 3 5 9</td></tr><tr><td class="cmd">std::sort(v.rbegin(), v.rend())</td><td class="dsc">сортирует по убыванию</td><td class="cmd">9 5 3 3 1</td></tr><tr><td class="cmd">std::reverse(v.begin(), v.end())</td><td class="dsc">переворачивает</td><td class="cmd">3 1 9 3 5</td></tr><tr><td class="cmd">std::ranges::min(v)</td><td class="dsc">минимальное значение</td><td class="cmd">1</td></tr><tr><td class="cmd">std::ranges::max(v)</td><td class="dsc">максимальное значение</td><td class="cmd">9</td></tr><tr><td class="cmd">std::count(v.begin(), v.end(), 3)</td><td class="dsc">сколько раз встречается 3</td><td class="cmd">2</td></tr><tr><td class="cmd">std::ranges::sort(v)</td><td class="dsc">то же, что первая строка, без begin/end (C++20)</td><td class="cmd">1 3 3 5 9</td></tr>
+  </table>
+</div>
+<div class="panel pin">
+  <h3>Алгоритмы берут не контейнер, а пару итераторов</h3>
+  <p>Полуинтервал <code>[begin, end)</code>: <code>begin()</code> указывает на первый элемент, <code>end()</code> — на позицию <strong>за</strong> последним. Поэтому один и тот же <code>sort</code> работает и для вектора, и для строки, и для куска вектора.</p>
+</div>
+  </div>
+</section>
+
+<!-- 22 -->
+<section class="slide" data-sec="Вопрос залу" data-time="2 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Вопрос залу</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;algorithm&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;std::string&gt; words = {<span class="s">"banana"</span>, <span class="s">"Apple"</span>, <span class="s">"cherry"</span>, <span class="s">"apple"</span>};
+    std::sort(words.begin(), words.end());
+
+    <span class="k">for</span> (std::string w : words) {
+        std::cout &lt;&lt; w &lt;&lt; <span class="s">' '</span>;
+    }
+    std::cout &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt"><span class="n">1</span><span>apple Apple banana cherry</span></div><div class="opt correct"><span class="n">2</span><span>Apple apple banana cherry</span></div><div class="opt"><span class="n">3</span><span>Apple banana cherry apple</span></div><div class="opt"><span class="n">4</span><span>apple banana cherry Apple</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q17_sort_strings</span>
+<span class="o">Apple apple banana cherry</span></div><div class="why"><p>Сортировка строк использует то же сравнение, что и <code>&lt;</code>: посимвольно, по кодам. Заглавная <code>A</code> меньше строчной <code>a</code>, поэтому <code>Apple</code> первым.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 23 -->
+<section class="slide" data-sec="Часть 2" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Часть 2</span></div><h2>Часть 2. Инструменты, в которых вы проводите весь день</h2>
+<div class="plan">
+  <div class="phase"><div class="phase-head"><span class="phase-name">less</span></div><ul class="phase-items"><li><span class="pt">Читать огромные файлы и искать в них, не открывая редактор</span></li></ul></div>
+  <div class="phase"><div class="phase-head"><span class="phase-name">vim</span></div><ul class="phase-items"><li><span class="pt">Редактор, который есть на любом сервере: режимы, перемещение, правка, поиск и замена</span></li></ul></div>
+  <div class="phase focus"><div class="phase-head"><span class="phase-name">VS Code</span></div><ul class="phase-items"><li><span class="pt">Текст без мыши, работа с кодом, переходы по коду</span></li></ul></div>
+</div>
+  </div>
+</section>
+
+<!-- 24 -->
+<section class="slide" data-sec="less" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">less</span></div><h2>more и less: зачем второй</h2>
+<div class="cols two">
+  <div class="stack">
+    <div class="term small"><span class="p">$</span> <span class="c">ls -lh big.log</span>
+<span class="o">20M  big.log</span>
+<span class="p">$</span> <span class="c">wc -l big.log</span>
+<span class="o">300000 big.log</span>
+<span class="p">$</span> <span class="c">head -3 big.log</span>
+<span class="o">2026-09-02 01:01:07 [INFO ] worker-01  cache miss (id=1)</span>
+<span class="o">2026-09-03 02:02:14 [INFO ] worker-02  timeout waiting for backend (id=2)</span>
+<span class="o">2026-09-04 03:03:21 [INFO ] worker-03  request handled (id=3)</span>
+<span class="p">$</span> <span class="c">less big.log</span>   <span class="cm"># открывается сразу</span></div>
+  </div>
+  <div class="stack">
+    <div class="panel">
+      <h3>more</h3>
+      <p>Показывает файл постранично. Задуман для чтения вперёд: пролистал — и всё.</p>
+    </div>
+    <div class="panel pin">
+      <h3>less</h3>
+      <p>Листает в обе стороны, ищет, прыгает к любой строке — и <strong>не читает файл целиком</strong>, прежде чем показать. Поэтому 20-мегабайтный лог открывается мгновенно.</p>
+    </div>
+    <p class="hint">Работает и с выводом других команд: <code>grep ERROR big.log | less</code>.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 25 -->
+<section class="slide" data-sec="less" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">less</span></div><h2>less: десять клавиш на всё</h2>
+<div class="cols two">
+  <div class="table-scroll"><table class="keys"><tr><th>Клавиша</th><th>Что делает</th></tr><tr><td class="cmd">Space / b</td><td class="dsc">страница вперёд / назад</td></tr><tr><td class="cmd">g / G</td><td class="dsc">в начало / в конец файла</td></tr><tr><td class="cmd">150000g</td><td class="dsc">к строке 150000</td></tr><tr><td class="cmd">-N</td><td class="dsc">включить / выключить номера строк (набрать прямо в less)</td></tr><tr><td class="cmd">/ERROR</td><td class="dsc">искать вперёд</td></tr><tr><td class="cmd">?ERROR</td><td class="dsc">искать назад</td></tr><tr><td class="cmd">n / N</td><td class="dsc">следующее / предыдущее совпадение</td></tr><tr><td class="cmd">&amp;ERROR</td><td class="dsc">показывать только строки с совпадением</td></tr><tr><td class="cmd">F</td><td class="dsc">следить за файлом, как tail -f; выход из режима — Ctrl+C</td></tr><tr><td class="cmd">q</td><td class="dsc">выйти</td></tr><tr><td class="cmd">h</td><td class="dsc">справка по всем клавишам</td></tr></table></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Самое важное — поиск</h3>
+      <p><code>/</code> ищет вперёд, <code>?</code> — назад, <code>n</code> повторяет поиск в ту же сторону, <code>N</code> — в обратную.</p>
+      <p>Искать можно регулярными выражениями: <code>/ERROR.*timeout</code>.</p>
+    </div>
+    <div class="panel">
+      <h3>Те же клавиши — в man и в vim</h3>
+      <p><code>man</code> показывает справку через less, а поиск <code>/ ? n N</code> и переходы <code>G</code> почти так же работают в vim. Выучив их здесь, вы выучили их и там.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 26 -->
+<section class="slide" data-sec="Упражнение" data-time="6 мин" data-timer="240" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Упражнение</span></div><h2>Упражнение: найдите в big.log</h2>
+<div class="cols two">
+  <div class="panel pin">
+    <h3>Только less, без grep</h3>
+    <ol><li>Сколько строк в файле?</li><li>Какое сообщение в строке 150000?</li><li>На какой строке первый ERROR и что в нём?</li><li>Какое сообщение у последнего ERROR?</li><li>Как показать только ошибки?</li></ol>
+  </div>
+  <div class="reveal" data-answer data-label="ответы  →"><div class="table-scroll"><table class="keys"><tr><th>Вопрос</th><th>Клавиши</th><th>Ответ</th></tr><tr><td class="dsc">Сколько строк в файле?</td><td class="cmd">G — последняя строка, её id совпадает с номером; или -N</td><td class="dsc">300000</td></tr><tr><td class="dsc">Какое сообщение в строке 150000?</td><td class="cmd">150000g</td><td class="dsc">request handled</td></tr><tr><td class="dsc">На какой строке первый ERROR и что в нём?</td><td class="cmd">-N, потом /ERROR</td><td class="dsc">строка 137: timeout waiting for backend</td></tr><tr><td class="dsc">Какое сообщение у последнего ERROR?</td><td class="cmd">G, потом ?ERROR</td><td class="dsc">cache miss (строка 299893)</td></tr><tr><td class="dsc">Как показать только ошибки?</td><td class="cmd">&amp;ERROR</td><td class="dsc">на экране остаются строки с [ERROR]</td></tr></table></div></div>
+</div>
+  </div>
+</section>
+
+<!-- 27 -->
+<section class="slide" data-sec="vim" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">vim</span></div><h2>vim: режимы и как из него выйти</h2>
+<div class="modes">
+  <div class="mode" style="grid-column:1;grid-row:1"><b>Insert</b><small>набор текста, как в обычном редакторе</small></div>
+  <div class="edge" style="grid-column:2;grid-row:1"><span class="to">← i a o</span><span>Esc →</span></div>
+  <div class="mode main"><b>Normal</b><small>команды и перемещение — здесь vim проводит большую часть времени</small></div>
+  <div class="edge" style="grid-column:4;grid-row:1"><span class="to">v V Ctrl+v →</span><span>← Esc</span></div>
+  <div class="mode" style="grid-column:5;grid-row:1"><b>Visual</b><small>выделение текста</small></div>
+  <div class="mode" style="grid-column:1;grid-row:2"><b>Replace</b><small>печать поверх текста</small></div>
+  <div class="edge" style="grid-column:2;grid-row:2"><span class="to">← R</span><span>Esc →</span></div>
+  <div class="edge" style="grid-column:4;grid-row:2"><span class="to">: →</span><span>← Enter или Esc</span></div>
+  <div class="mode" style="grid-column:5;grid-row:2"><b>Command</b><small>команды вроде <code>:w</code> и <code>:q</code></small></div>
+</div>
+<div class="table-scroll">
+  <table class="keys">
+    <tr><td class="cmd">:w</td><td class="dsc">сохранить</td><td class="cmd">:q</td><td class="dsc">выйти (откажется, если есть несохранённое)</td></tr>
+    <tr><td class="cmd">:wq</td><td class="dsc">сохранить и выйти</td><td class="cmd">:q!</td><td class="dsc">выйти, <strong>выбросив</strong> изменения</td></tr>
+  </table>
+</div>
+  </div>
+</section>
+
+<!-- 28 -->
+<section class="slide" data-sec="vim" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">vim</span></div><h2>Перемещение: руки остаются на месте</h2>
+<div class="cols two">
+  <div class="table-scroll"><table class="keys"><tr><th>Normal</th><th>Куда</th></tr><tr><td class="cmd">h j k l</td><td class="dsc">влево, вниз, вверх, вправо</td></tr><tr><td class="cmd">w / b / e</td><td class="dsc">к началу следующего слова / к началу слова назад / к концу слова</td></tr><tr><td class="cmd">0 / ^ / $</td><td class="dsc">в начало строки / к первому непробельному символу / в конец строки</td></tr><tr><td class="cmd">gg / G</td><td class="dsc">в начало / в конец файла</td></tr><tr><td class="cmd">42G  или  :42</td><td class="dsc">к строке 42</td></tr><tr><td class="cmd">%</td><td class="dsc">к парной скобке</td></tr><tr><td class="cmd">Ctrl+d / Ctrl+u</td><td class="dsc">полэкрана вниз / вверх</td></tr><tr><td class="cmd">f(</td><td class="dsc">к ближайшей скобке ( в строке</td></tr><tr><td class="cmd">3j</td><td class="dsc">число перед командой — повторить: три строки вниз</td></tr></table></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Почему h j k l, а не стрелки</h3>
+      <p>Они под пальцами правой руки: не нужно тянуться к стрелкам. Стрелки в vim тоже работают — но попробуйте неделю без них.</p>
+    </div>
+    <div class="panel">
+      <h3>Грамматика vim</h3>
+      <p>Команды складываются: <strong>число + действие + движение</strong>. <code>d</code> — удалить, <code>w</code> — до следующего слова, <code>dw</code> — удалить до следующего слова, <code>3dw</code> — три слова.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 29 -->
+<section class="slide" data-sec="vim" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">vim</span></div><h2>Правка, отмена и повтор</h2>
+<div class="cols two">
+  <div class="table-scroll"><table class="keys"><tr><th>Normal</th><th>Что делает</th></tr><tr><td class="cmd">i / a</td><td class="dsc">вставка перед курсором / после</td></tr><tr><td class="cmd">o / O</td><td class="dsc">новая строка ниже / выше</td></tr><tr><td class="cmd">I / A</td><td class="dsc">вставка в начало / конец строки</td></tr><tr><td class="cmd">x</td><td class="dsc">удалить символ</td></tr><tr><td class="cmd">dd</td><td class="dsc">удалить строку</td></tr><tr><td class="cmd">dw / db / daw</td><td class="dsc">удалить до след. слова / назад / слово целиком</td></tr><tr><td class="cmd">D</td><td class="dsc">удалить до конца строки</td></tr><tr><td class="cmd">ciw</td><td class="dsc">заменить слово под курсором</td></tr><tr><td class="cmd">yy / p / P</td><td class="dsc">скопировать строку / вставить ниже / выше</td></tr><tr><td class="cmd">u / Ctrl+r</td><td class="dsc">отменить / вернуть отменённое</td></tr><tr><td class="cmd">.</td><td class="dsc">повторить последнее изменение</td></tr><tr><td class="cmd">&gt;&gt; / &lt;&lt;</td><td class="dsc">сдвинуть строку вправо / влево</td></tr><tr><td class="cmd">r / R</td><td class="dsc">заменить один символ / режим замены</td></tr></table></div>
+  <div class="stack">
+    <span class="label">вопрос: курсор в начале файла, набираем ddp — что станет с файлом?</span>
+    <pre class="code small"><span class="k">int</span> a = <span class="num">1</span>;
+<span class="k">int</span> b = <span class="num">2</span>;
+<span class="k">int</span> c = <span class="num">3</span>;</pre><div class="options"><div class="opt correct"><span class="n">1</span><span>int b = 2;
+int a = 1;
+int c = 3;</span></div><div class="opt"><span class="n">2</span><span>int a = 1;
+int a = 1;
+int c = 3;</span></div><div class="opt"><span class="n">3</span><span>int b = 2;
+int c = 3;
+int a = 1;</span></div><div class="opt"><span class="n">4</span><span>int a = 1;
+int b = 2;
+int c = 3;</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="why"><p><code>dd</code> удаляет первую строку и запоминает её, <code>p</code> вставляет запомненное <strong>ниже</strong> текущей. Итог — две строки поменялись местами. Удаление в vim — это одновременно «вырезать».</p></div></div></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 30 -->
+<section class="slide" data-sec="vim" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">vim</span></div><h2>Visual: выделить и что-то сделать</h2>
+<div class="cols two">
+  <div class="stack">
+    <div class="table-scroll">
+      <table class="keys">
+        <tr><td class="cmd">v / V / Ctrl+v</td><td class="dsc">выделять символы / строки / прямоугольник</td></tr>
+        <tr><td class="cmd">y / d</td><td class="dsc">скопировать / вырезать выделенное</td></tr>
+        <tr><td class="cmd">p</td><td class="dsc">вставить в другом месте</td></tr>
+        <tr><td class="cmd">&gt; / &lt;</td><td class="dsc">сдвинуть все выделенные строки</td></tr>
+      </table>
+    </div>
+    <span class="label">сдвиг: V j &gt;</span>
+    <pre class="code small">    <span class="k">int</span> a = <span class="num">1</span>;
+    <span class="k">int</span> b = <span class="num">2</span>;
+<span class="k">int</span> c = <span class="num">3</span>;</pre>
+  </div>
+  <div class="stack">
+    <span class="label">закомментировать три строки: ^ Ctrl+v 2j I// Esc</span>
+    <pre class="code small"><span class="cm">// int a = 1;</span>
+<span class="cm">// int b = 2;</span>
+<span class="cm">// int c = 3;</span></pre>
+    <span class="label">раскомментировать: 0 Ctrl+v 2j 2l d</span>
+    <pre class="code small"><span class="k">int</span> a = <span class="num">1</span>;
+<span class="k">int</span> b = <span class="num">2</span>;
+<span class="k">int</span> c = <span class="num">3</span>;</pre>
+    <p class="hint">Ctrl+v выделяет столбец, <code>I</code> вставляет текст перед ним сразу во всех строках. Вставка появится во всех строках после <kbd>Esc</kbd>.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 31 -->
+<section class="slide" data-sec="vim" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">vim</span></div><h2>Поиск и замена</h2>
+<div class="cols two">
+  <div class="stack">
+    <div class="table-scroll">
+      <table class="keys">
+        <tr><td class="cmd">/text  ?text</td><td class="dsc">искать вперёд / назад — как в less</td></tr>
+        <tr><td class="cmd">n / N  *</td><td class="dsc">следующее / предыдущее / искать слово под курсором</td></tr>
+        <tr><td class="cmd">:%s/aaa/bbb/g</td><td class="dsc">заменить aaa на bbb во всём файле</td></tr>
+        <tr><td class="cmd">:%s/aaa/bbb/gc</td><td class="dsc">то же, но спрашивать про каждое место</td></tr>
+        <tr><td class="cmd">:2,3s/int/long/g</td><td class="dsc">только в строках 2–3</td></tr>
+        <tr><td class="cmd">:%s/\&lt;x\&gt;/value/g</td><td class="dsc">только слово x целиком, не max_x</td></tr>
+      </table>
+    </div>
+    <div class="term small"><span class="cm"># :2,3s/int/long/g на файле из трёх строк</span>
+<span class="o">int a = 1;</span>
+<span class="o">long b = 2;</span>
+<span class="o">long c = 3;</span></div>
+  </div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Убрать пробелы в концах строк</h3>
+      <p><code>:%s/\s\+$//e</code></p>
+      <p><code>\s\+</code> — один или больше пробельных символов, <code>$</code> — конец строки, флаг <code>e</code> — не ругаться, если таких мест нет.</p>
+    </div>
+    <span class="label">осторожно: без $ удалятся вообще все пробелы</span>
+    <pre class="code small">intmain(){
+std::vector&lt;<span class="k">int</span>&gt;v;
+intx;
+<span class="k">while</span>(std::cin&gt;&gt;x){</pre><div class="term small"><span class="e">drill.cpp:4:1: error: ISO C++ forbids declaration of ‘intmain’ with no type [-fpermissive]</span></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 32 -->
+<section class="slide" data-sec="vim" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">vim</span></div><h2>.vimrc: настроить один раз</h2>
+<div class="cols two">
+  <pre class="code small">" ~/.vimrc — минимум для работы с кодом
+
+syntax on               " подсветка синтаксиса
+filetype plugin indent on  " отступы по правилам языка (нужно для =)
+set number              " номера строк
+set ruler               " позиция курсора в статусной строке
+
+set tabstop=4           " таб показывается шириной 4
+set shiftwidth=4        " сдвиг &gt;&gt; и &lt;&lt; на 4
+set expandtab           " вставлять пробелы вместо табов
+set autoindent          " новая строка наследует отступ
+set smartindent         " и добавляет отступ после {
+
+set incsearch           " подсвечивать совпадение по мере набора
+set hlsearch            " подсвечивать все совпадения
+set ignorecase          " поиск без учёта регистра,
+set smartcase           " но если набрал заглавную — с учётом
+
+set showcmd             " показывать набираемую команду
+set backspace=indent,eol,start</pre>
+  <div class="stack">
+    <div class="term small"><span class="p">$</span> <span class="c">cp vimrc-example ~/.vimrc</span></div>
+    <div class="panel pin">
+      <h3>Три строки, ради которых всё</h3>
+      <p><code>set tabstop=4</code> и <code>shiftwidth=4</code> — отступ в 4 пробела.</p>
+      <p><code>set expandtab</code> — Tab вставляет пробелы, а не символ табуляции.</p>
+      <p><code>autoindent</code> и <code>filetype plugin indent on</code> — отступы подставляются сами.</p>
+    </div>
+    <div class="panel">
+      <h3>Выровнять весь файл</h3>
+      <p><code>gg=G</code> — в начало и «выровнять до конца». С этими настройками vim расставит отступы по правилам C++.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 33 -->
+<section class="slide" data-sec="Упражнение" data-time="9 мин" data-timer="420" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Упражнение</span></div><h2>Упражнение: приведите drill.cpp в порядок</h2>
+<div class="cols two">
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Только vim, без мыши и стрелок</h3>
+      <ol>
+        <li>Убрать пробелы в концах строк</li>
+        <li>Выровнять отступы во всём файле</li>
+        <li>Переименовать переменную <code>x</code> в <code>value</code> — но не трогать <code>max_x</code></li>
+        <li>Закомментировать три строки с <code>debug</code></li>
+        <li>Сохранить и собрать прямо из vim: <code>:!g++ -std=c++20 -Wall % -o drill</code></li>
+      </ol>
+    </div>
+    <span class="label">было: · — пробел в конце строки, → — табуляция</span>
+    <pre class="code small">#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int main() {<span class="vis">···</span>
+std::vector&lt;int&gt; v;
+→   int x;
+  while (std::cin &gt;&gt; x) {<span class="vis">···</span>
+        v.push_back(x);
+  }
+std::cout &lt;&lt; "debug: size=" &lt;&lt; v.size() &lt;&lt; '\n';<span class="vis">···</span>
+std::cout &lt;&lt; "debug: first=" &lt;&lt; (v.empty() ? 0 : v[0]) &lt;&lt; '\n';
+std::cout &lt;&lt; "debug: last=" &lt;&lt; (v.empty() ? 0 : v.back()) &lt;&lt; '\n';
+→   int max_x = 0;
+for (int y : v) {
+if (y &gt; max_x) {
+max_x = y;
+}
+}
+    std::cout &lt;&lt; max_x &lt;&lt; '\n';<span class="vis">··</span>
+}</pre>
+  </div>
+  <div class="reveal" data-answer data-label="как должно получиться  →"><div class="stack"><span class="label">:%s/\s\+$//e · gg=G · :%s/\&lt;x\&gt;/value/g · /debug · ^ Ctrl+v 2j I// Esc</span><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; v;
+    <span class="k">int</span> value;
+    <span class="k">while</span> (std::cin &gt;&gt; value) {
+        v.push_back(value);
+    }
+    <span class="cm">// std::cout &lt;&lt; "debug: size=" &lt;&lt; v.size() &lt;&lt; '\n';</span>
+    <span class="cm">// std::cout &lt;&lt; "debug: first=" &lt;&lt; (v.empty() ? 0 : v[0]) &lt;&lt; '\n';</span>
+    <span class="cm">// std::cout &lt;&lt; "debug: last=" &lt;&lt; (v.empty() ? 0 : v.back()) &lt;&lt; '\n';</span>
+    <span class="k">int</span> max_x = <span class="num">0</span>;
+    <span class="k">for</span> (<span class="k">int</span> y : v) {
+        <span class="k">if</span> (y &gt; max_x) {
+            max_x = y;
+        }
+    }
+    std::cout &lt;&lt; max_x &lt;&lt; <span class="s">'\n'</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">echo "3 9 4" | ./drill</span>
+<span class="o">9</span></div></div></div>
+</div>
+  </div>
+</section>
+
+<!-- 34 -->
+<section class="slide" data-sec="vim" data-time="3 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">vim</span></div><h2>На любителя: макросы, вкладки, прыжки по коду</h2>
+<div class="cols three">
+  <div class="panel">
+    <h3>Макросы</h3>
+    <p><code>qa</code> — начать запись в регистр a, дальше любые команды, <code>q</code> — закончить.</p>
+    <p><code>@a</code> — выполнить, <code>@@</code> — ещё раз, <code>10@a</code> — десять раз.</p>
+    <p class="hint">Записали <code>I// </code>, Esc, <code>j</code> — и <code>3@a</code> закомментирует три строки.</p>
+  </div>
+  <div class="panel">
+    <h3>Вкладки и окна</h3>
+    <p><code>:tabnew file</code> — открыть во вкладке, <code>gt</code> / <code>gT</code> — следующая / предыдущая.</p>
+    <p><code>:vsp file</code> — окно рядом, <code>Ctrl+w w</code> — перейти в другое окно.</p>
+  </div>
+  <div class="panel pin">
+    <h3>Прыжки по коду</h3>
+    <p><code>gd</code> — к объявлению локальной переменной.</p>
+    <p><code>gf</code> — открыть файл под курсором: на <code>#include &lt;vector&gt;</code> откроется сам заголовок.</p>
+    <p><code>Ctrl+o</code> — вернуться назад, <code>Ctrl+i</code> — вперёд.</p>
+  </div>
+</div>
+<div class="term small"><span class="cm"># чтобы gf находил системные заголовки, путь к ним добавляют в ~/.vimrc:</span>
+<span class="c">set path+=/usr/include/c++/13</span></div>
+  </div>
+</section>
+
+<!-- 35 -->
+<section class="slide" data-sec="VS Code" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">VS Code</span></div><h2>Текст без мыши</h2>
+<div class="cols two">
+  <div class="stack">
+    <div class="table-scroll"><table class="keys"><tr><th>Что сделать</th><th>Linux</th><th>macOS</th></tr><tr><td class="dsc">на слово влево / вправо</td><td class="cmd">Ctrl+← / Ctrl+→</td><td class="cmd">⌥← / ⌥→</td></tr><tr><td class="dsc">в начало / конец строки</td><td class="cmd">Home / End</td><td class="cmd">⌘← / ⌘→</td></tr><tr><td class="dsc">в начало / конец файла</td><td class="cmd">Ctrl+Home / Ctrl+End</td><td class="cmd">⌘↑ / ⌘↓</td></tr><tr><td class="dsc">выделять</td><td class="cmd">то же + Shift</td><td class="cmd">то же + ⇧</td></tr><tr><td class="dsc">удалить слово слева</td><td class="cmd">Ctrl+Backspace</td><td class="cmd">⌥⌫</td></tr><tr><td class="dsc">выделить строку целиком</td><td class="cmd">Ctrl+L</td><td class="cmd">⌘L</td></tr></table></div>
+    <p class="hint">Движения по словам и строкам работают не только в VS Code, но и почти в любом поле ввода.</p>
+  </div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Попробуйте прямо сейчас</h3>
+      <p>Откройте <code>drill.cpp</code> и выделите слово <code>push_back</code>, не трогая мышь.</p>
+    </div>
+    <div class="reveal" data-answer data-label="как это сделать  →"><div class="answer"><div class="why"><p>Поставить курсор перед словом: <kbd>Ctrl</kbd>+<kbd>←</kbd> / <kbd>→</kbd> по словам. Затем <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>→</kbd> — выделится слово. На macOS то же с <kbd>⌥</kbd> вместо Ctrl.</p></div></div></div>
+    <div class="panel">
+      <h3>А в терминале (bash)</h3>
+      <p><kbd>Ctrl</kbd>+<kbd>A</kbd> / <kbd>Ctrl</kbd>+<kbd>E</kbd> — в начало / конец строки, <kbd>Ctrl</kbd>+<kbd>W</kbd> — удалить слово слева, <kbd>Alt</kbd>+<kbd>B</kbd> / <kbd>Alt</kbd>+<kbd>F</kbd> — на слово назад / вперёд, <kbd>Ctrl</kbd>+<kbd>R</kbd> — поиск по истории команд.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 36 -->
+<section class="slide" data-sec="VS Code" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">VS Code</span></div><h2>Базовые сочетания — и одно, которое в разных редакторах разное</h2>
+<div class="cols two">
+  <div class="table-scroll"><table class="keys"><tr><th>Что сделать</th><th>Linux</th><th>macOS</th></tr><tr><td class="dsc">копировать / вырезать / вставить</td><td class="cmd">Ctrl+C / Ctrl+X / Ctrl+V</td><td class="cmd">⌘C / ⌘X / ⌘V</td></tr><tr><td class="dsc">отменить</td><td class="cmd">Ctrl+Z</td><td class="cmd">⌘Z</td></tr><tr><td class="dsc">вернуть отменённое</td><td class="cmd">Ctrl+Y</td><td class="cmd">⇧⌘Z</td></tr><tr><td class="dsc">сохранить</td><td class="cmd">Ctrl+S</td><td class="cmd">⌘S</td></tr><tr><td class="dsc">найти в файле</td><td class="cmd">Ctrl+F</td><td class="cmd">⌘F</td></tr><tr><td class="dsc">открыть файл по имени</td><td class="cmd">Ctrl+P</td><td class="cmd">⌘P</td></tr><tr><td class="dsc">переключиться на прошлую вкладку</td><td class="cmd">Ctrl+Tab</td><td class="cmd">⌃Tab</td></tr><tr><td class="dsc">любая команда из меню</td><td class="cmd">Ctrl+Shift+P</td><td class="cmd">⇧⌘P</td></tr><tr><td class="dsc">терминал внутри редактора</td><td class="cmd">Ctrl+`</td><td class="cmd">⌃`</td></tr></table></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Меню клавиатурой</h3>
+      <p><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> открывает палитру команд: там есть всё, что есть в меню. Начните набирать название действия — рядом будет написано его сочетание.</p>
+    </div>
+    <span class="label">вопрос: что сделает Ctrl+Y в CLion на Linux?</span>
+    <div class="options"><div class="opt"><span class="n">1</span><span>вернёт отменённое</span></div><div class="opt correct"><span class="n">2</span><span>удалит текущую строку</span></div><div class="opt"><span class="n">3</span><span>вставит из буфера</span></div><div class="opt"><span class="n">4</span><span>ничего</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="why"><p>В стандартной раскладке CLion <kbd>Ctrl</kbd>+<kbd>Y</kbd> — «удалить строку», а «вернуть отменённое» — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>. В VS Code наоборот: <kbd>Ctrl</kbd>+<kbd>Y</kbd> возвращает отменённое.</p><p>Пересели в другой редактор — проверьте, как там устроен повтор.</p></div></div></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 37 -->
+<section class="slide" data-sec="VS Code" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">VS Code</span></div><h2>Работа с кодом: много строк сразу</h2>
+<div class="cols two">
+  <div class="table-scroll"><table class="keys"><tr><th>Что сделать</th><th>Linux</th><th>macOS</th></tr><tr><td class="dsc">закомментировать строки</td><td class="cmd">Ctrl+/</td><td class="cmd">⌘/</td></tr><tr><td class="dsc">блочный комментарий</td><td class="cmd">Ctrl+Shift+A</td><td class="cmd">⇧⌥A</td></tr><tr><td class="dsc">сдвинуть вправо / влево</td><td class="cmd">Ctrl+] / Ctrl+[</td><td class="cmd">⌘] / ⌘[</td></tr><tr><td class="dsc">переместить строку вверх / вниз</td><td class="cmd">Alt+↑ / Alt+↓</td><td class="cmd">⌥↑ / ⌥↓</td></tr><tr><td class="dsc">скопировать строку вниз</td><td class="cmd">Ctrl+Shift+Alt+↓</td><td class="cmd">⇧⌥↓</td></tr><tr><td class="dsc">удалить строку</td><td class="cmd">Ctrl+Shift+K</td><td class="cmd">⇧⌘K</td></tr><tr><td class="dsc">ещё курсор строкой ниже</td><td class="cmd">Shift+Alt+↓</td><td class="cmd">⌥⌘↓</td></tr><tr><td class="dsc">выделить следующее такое же слово</td><td class="cmd">Ctrl+D</td><td class="cmd">⌘D</td></tr><tr><td class="dsc">выделить все такие же сразу</td><td class="cmd">Ctrl+Shift+L</td><td class="cmd">⇧⌘L</td></tr><tr><td class="dsc">отформатировать файл</td><td class="cmd">Ctrl+Shift+I</td><td class="cmd">⇧⌥F</td></tr><tr><td class="dsc">убрать пробелы в концах строк</td><td class="cmd">Ctrl+K Ctrl+X</td><td class="cmd">⌘K ⌘X</td></tr></table></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Всё работает на выделении</h3>
+      <p>Выделили десять строк — <kbd>Ctrl</kbd>+<kbd>/</kbd> закомментирует все, ещё раз — раскомментирует. <kbd>Ctrl</kbd>+<kbd>]</kbd> сдвинет все вправо.</p>
+    </div>
+    <div class="panel">
+      <h3>Несколько курсоров</h3>
+      <p><kbd>Alt</kbd>+клик ставит ещё один курсор. <kbd>Ctrl</kbd>+<kbd>D</kbd> несколько раз — выделить несколько одинаковых слов и поменять их одновременно.</p>
+    </div>
+    <div class="panel">
+      <h3>Осторожно с советами из интернета</h3>
+      <p>Чаще всего пишут сочетания для Windows. На Linux отличаются блочный комментарий, копирование строки, мультикурсор, форматирование и переход назад.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 38 -->
+<section class="slide" data-sec="VS Code" data-time="4 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">VS Code</span></div><h2>Прыгать по коду и возвращаться</h2>
+<div class="cols two">
+  <div class="table-scroll"><table class="keys"><tr><th>Что сделать</th><th>Linux</th><th>macOS</th></tr><tr><td class="dsc">к определению</td><td class="cmd">F12  или  Ctrl+клик</td><td class="cmd">F12  или  ⌘+клик</td></tr><tr><td class="dsc">внутрь #include</td><td class="cmd">F12 на имени заголовка</td><td class="cmd">F12 на имени заголовка</td></tr><tr><td class="dsc">вернуться назад / вперёд</td><td class="cmd">Ctrl+Alt+- / Ctrl+Shift+-</td><td class="cmd">⌃- / ⌃⇧-</td></tr><tr><td class="dsc">к строке по номеру</td><td class="cmd">Ctrl+G</td><td class="cmd">⌃G</td></tr><tr><td class="dsc">к файлу по имени</td><td class="cmd">Ctrl+P</td><td class="cmd">⌘P</td></tr><tr><td class="dsc">переименовать везде</td><td class="cmd">F2</td><td class="cmd">F2</td></tr><tr><td class="dsc">все сочетания и поиск по ним</td><td class="cmd">Ctrl+K Ctrl+S</td><td class="cmd">⌘K ⌘S</td></tr></table></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Прыгнули — вернитесь</h3>
+      <p>Ушли к определению или внутрь <code>&lt;vector&gt;</code> — <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>-</kbd> возвращает туда, где были. Можно нажимать несколько раз, как «назад» в браузере. В vim то же самое — <code>Ctrl+o</code>.</p>
+    </div>
+    <div class="panel">
+      <h3>Для C++ нужно расширение</h3>
+      <p>Переходы, переименование и форматирование работают, когда в VS Code стоит расширение для C/C++ и оно знает, где лежат заголовки.</p>
+    </div>
+    <div class="panel">
+      <h3>Не помните сочетание</h3>
+      <p><kbd>Ctrl</kbd>+<kbd>K</kbd> <kbd>Ctrl</kbd>+<kbd>S</kbd> — список всех сочетаний с поиском. Там же можно назначить своё.</p>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 39 -->
+<section class="slide" data-sec="CLion" data-time="2 мин · можно пропустить" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">CLion</span></div><h2>Если у вас CLion</h2>
+<div class="cols two">
+  <div class="table-scroll"><table class="keys"><tr><th>Что сделать</th><th>Linux</th><th>macOS</th></tr><tr><td class="dsc">к объявлению</td><td class="cmd">Ctrl+B  или  Ctrl+клик</td><td class="cmd">⌘B  или  ⌘+клик</td></tr><tr><td class="dsc">назад / вперёд</td><td class="cmd">Ctrl+Alt+← / → ; в GNOME Shift+Alt+← / →</td><td class="cmd">⌘[ / ⌘]</td></tr><tr><td class="dsc">закомментировать строки</td><td class="cmd">Ctrl+/</td><td class="cmd">—</td></tr><tr><td class="dsc">сдвинуть выделение</td><td class="cmd">Tab / Shift+Tab</td><td class="cmd">Tab / ⇧Tab</td></tr><tr><td class="dsc">удалить строку</td><td class="cmd">Ctrl+Y</td><td class="cmd">⌘⌫</td></tr><tr><td class="dsc">вернуть отменённое</td><td class="cmd">Ctrl+Shift+Z</td><td class="cmd">—</td></tr><tr><td class="dsc">дублировать строку</td><td class="cmd">Ctrl+D</td><td class="cmd">—</td></tr><tr><td class="dsc">переименовать</td><td class="cmd">Shift+F6</td><td class="cmd">⇧F6</td></tr><tr><td class="dsc">отформатировать</td><td class="cmd">Ctrl+Alt+L ; в KDE Shift+Alt+L</td><td class="cmd">—</td></tr><tr><td class="dsc">найти действие по названию</td><td class="cmd">Ctrl+Shift+A</td><td class="cmd">—</td></tr><tr><td class="dsc">искать везде</td><td class="cmd">двойной Shift</td><td class="cmd">двойной ⇧</td></tr><tr><td class="dsc">к строке</td><td class="cmd">Ctrl+G</td><td class="cmd">⌘L</td></tr></table></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Главное сочетание CLion</h3>
+      <p><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> — найти любое действие по названию. Рядом с каждым действием написано его сочетание.</p>
+    </div>
+    <p class="hint">«—» — на macOS смотрите сочетание в поиске действий: оно зависит от выбранной раскладки.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 40 -->
+<section class="slide" data-sec="Упражнение" data-time="7 мин" data-timer="300" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Упражнение</span></div><h2>Упражнение: drill.cpp в VS Code без мыши</h2>
+<div class="cols two">
+  <div class="panel pin">
+    <h3>Мышь убрать в сторону</h3>
+    <ol><li>Открыть <code>drill.cpp</code></li><li>Перейти к строке 10 — первая с debug</li><li>Выделить три строки и закомментировать</li><li>Переименовать <code>x</code> в <code>value</code></li><li>Открыть <code>&lt;vector&gt;</code> и вернуться</li><li>Убрать пробелы в концах строк</li><li>Отформатировать файл</li><li>Открыть терминал и собрать</li></ol>
+  </div>
+  <div class="reveal" data-answer data-label="сочетания для каждого шага  →"><div class="table-scroll"><table class="keys"><tr><th>Шаг</th><th>Linux</th><th>macOS</th></tr><tr><td class="dsc">открыть <code>drill.cpp</code></td><td class="cmd">Ctrl+P</td><td class="cmd">⌘P</td></tr><tr><td class="dsc">перейти к строке 10 — первая с debug</td><td class="cmd">Ctrl+G</td><td class="cmd">⌃G</td></tr><tr><td class="dsc">выделить три строки и закомментировать</td><td class="cmd">Shift+↓ Shift+↓, Ctrl+/</td><td class="cmd">⇧↓ ⇧↓, ⌘/</td></tr><tr><td class="dsc">переименовать <code>x</code> в <code>value</code></td><td class="cmd">F2</td><td class="cmd">F2</td></tr><tr><td class="dsc">открыть <code>&lt;vector&gt;</code> и вернуться</td><td class="cmd">F12, Ctrl+Alt+-</td><td class="cmd">F12, ⌃-</td></tr><tr><td class="dsc">убрать пробелы в концах строк</td><td class="cmd">Ctrl+K Ctrl+X</td><td class="cmd">⌘K ⌘X</td></tr><tr><td class="dsc">отформатировать файл</td><td class="cmd">Ctrl+Shift+I</td><td class="cmd">⇧⌥F</td></tr><tr><td class="dsc">открыть терминал и собрать</td><td class="cmd">Ctrl+`</td><td class="cmd">⌃`</td></tr></table></div></div>
+</div>
+  </div>
+</section>
+
+<!-- 41 -->
+<section class="slide" data-sec="Ваш любимый приём" data-time="5 мин" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Ваш любимый приём</span></div><h2>Ваш любимый приём</h2>
+<p class="sub">По кругу: каждый показывает одну вещь, которую любит в своём редакторе или терминале. Повторяться нельзя.</p>
+<div class="cols two">
+  <div class="panel pin">
+    <h3>Что можно показать</h3>
+    <ul>
+      <li>сочетание, без которого уже не можете</li>
+      <li>плагин или настройку</li>
+      <li>трюк в терминале</li>
+      <li>то, что узнали сегодня и уже понравилось</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>Если стесняются начинать</h3>
+    <p>Начните с себя — покажите свой любимый приём первыми.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 42 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two">
+  <div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string a = <span class="s">"hello"</span>;
+    std::string b = <span class="s">"привет"</span>;
+
+    std::cout &lt;&lt; a.size() &lt;&lt; <span class="s">' '</span> &lt;&lt; b.size() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div>
+  <div class="stack">
+    <span class="label">варианты — покажите номер на пальцах</span>
+    <div class="options"><div class="opt"><span class="n">1</span><span>5 6</span></div><div class="opt"><span class="n">2</span><span>5 12</span></div><div class="opt"><span class="n">3</span><span>5 18</span></div><div class="opt"><span class="n">4</span><span>ошибка компиляции</span></div></div>
+    <p class="hint">Ответ — на следующем слайде.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 43 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Ответ: 5 12</h2>
+<div class="cols two">
+  <div class="stack">
+    <span class="label">правильный вариант 2</span>
+    <div class="term small"><span class="p">$</span> <span class="c">./quiz/q29_cyrillic_size</span>
+<span class="o">5 12</span></div>
+    <div class="panel pin">
+      <h3>Почему 12</h3>
+      <p><code>std::string</code> хранит элементы типа <code>char</code>, и <code>size()</code> считает именно их. Компилятор по умолчанию записывает строковые литералы в кодировке UTF-8: латинская буква в ней занимает один <code>char</code>, кириллическая — два. В «привет» шесть букв, значит 12.</p>
+    </div>
+  </div>
+  <div class="stack">
+    <div class="panel">
+      <h3>Что из этого следует</h3>
+      <p><code>size()</code> у строки с русскими буквами — не количество букв. И <code>s[0]</code> у «привет» — это не буква «п», а только первая половина её кода.</p>
+    </div>
+    <p class="hint">Поэтому задачи на отдельные символы на семинаре — на латинице. Правильная работа с кодировками — отдельная тема.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 44 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Что напечатает программа?</h2>
+<div class="cols two">
+  <div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> age;
+    std::string name;
+
+    std::cin &gt;&gt; age;
+    std::getline(std::cin, name);
+
+    std::cout &lt;&lt; <span class="s">"age="</span> &lt;&lt; age &lt;&lt; <span class="s">" name=["</span> &lt;&lt; name &lt;&lt; <span class="s">"]\n"</span>;
+}</pre><span class="label">во входном буфере после ввода «19», Enter, «Анна Петрова», Enter</span><div class="buf"><span class="ch  ">1</span><span class="ch  ">9</span><span class="ch nl ">⏎</span><span class="ch  ">Анна Петрова</span><span class="ch nl ">⏎</span></div></div>
+  <div class="stack">
+    <span class="label">варианты — покажите номер на пальцах</span>
+    <div class="options"><div class="opt"><span class="n">1</span><span>age=19 name=[Анна Петрова]</span></div><div class="opt"><span class="n">2</span><span>age=19 name=[Анна]</span></div><div class="opt"><span class="n">3</span><span>age=19 name=[]</span></div><div class="opt"><span class="n">4</span><span>age=0 name=[19]</span></div></div>
+    <p class="hint">Ответ — после следующего слайда.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 45 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>А если так?</h2>
+<p class="sub">Отличие одно — <code>std::cin &gt;&gt; std::ws</code> перед чтением строки. Ввод тот же.</p>
+<div class="cols two">
+  <div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> age;
+    std::string name;
+
+    std::cin &gt;&gt; age;
+    std::getline(std::cin &gt;&gt; std::ws, name);
+
+    std::cout &lt;&lt; <span class="s">"age="</span> &lt;&lt; age &lt;&lt; <span class="s">" name=["</span> &lt;&lt; name &lt;&lt; <span class="s">"]\n"</span>;
+}</pre><span class="label">во входном буфере после ввода «19», Enter, «Анна Петрова», Enter</span><div class="buf"><span class="ch  ">1</span><span class="ch  ">9</span><span class="ch nl ">⏎</span><span class="ch  ">Анна Петрова</span><span class="ch nl ">⏎</span></div></div>
+  <div class="stack">
+    <span class="label">варианты — покажите номер на пальцах</span>
+    <div class="options"><div class="opt"><span class="n">1</span><span>age=19 name=[Анна Петрова]</span></div><div class="opt"><span class="n">2</span><span>age=19 name=[]</span></div><div class="opt"><span class="n">3</span><span>age=19 name=[ Анна Петрова]</span></div><div class="opt"><span class="n">4</span><span>age=19 name=[Анна]</span></div></div>
+    <p class="hint">Ответы на обе программы — на следующем слайде.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 46 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Ответ: кто что прочитал из буфера</h2>
+<div class="cols two">
+  <div class="reveal" data-answer data-label="ответ на первую программу  →"><div class="stack answer"><span class="label">первая программа · правильный вариант 3</span><pre class="code small">std::getline(std::cin, name);</pre><div class="term small"><span class="p">$</span> <span class="c">printf '19\nАнна Петрова\n' | ./quiz/q02_getline_trap</span>
+<span class="o">age=19 name=[]</span></div><div class="buf"><span class="ch  a">1</span><span class="ch  a">9</span><span class="ch nl g">⏎</span><span class="ch  rest">Анна Петрова</span><span class="ch nl rest">⏎</span></div><div class="buf-legend"><span><i class="a"></i>прочитал <code>&gt;&gt;</code></span><span><i class="g"></i>прочитал <code>getline</code> (<code>⏎</code> выброшен)</span><span><i class="rest"></i>осталось непрочитанным</span></div><div class="why"><p><code>&gt;&gt;</code> читает <code>19</code> и останавливается <strong>перед</strong> <code>⏎</code>. <code>getline</code> читает символы до первого <code>⏎</code> и выбрасывает его — а он идёт сразу. Строка пустая, «Анна Петрова» не прочитана.</p></div></div></div>
+  <div class="reveal" data-answer data-label="ответ на вторую программу  →"><div class="stack answer"><span class="label">вторая программа · правильный вариант 1</span><pre class="code small">std::getline(std::cin &gt;&gt; std::ws, name);</pre><div class="term small"><span class="p">$</span> <span class="c">printf '19\nАнна Петрова\n' | ./quiz/q02b_getline_fix</span>
+<span class="o">age=19 name=[Анна Петрова]</span></div><div class="buf"><span class="ch  a">1</span><span class="ch  a">9</span><span class="ch nl w">⏎</span><span class="ch  g">Анна Петрова</span><span class="ch nl g">⏎</span></div><div class="buf-legend"><span><i class="a"></i>прочитал <code>&gt;&gt;</code></span><span><i class="w"></i>пропустил <code>std::ws</code></span><span><i class="g"></i>прочитал <code>getline</code> (<code>⏎</code> выброшен)</span></div><div class="why"><p><code>std::ws</code> — манипулятор: извлекает из потока пробельные символы (пробелы, табы, <code>⏎</code>) до первого непробельного. Он убирает <code>⏎</code> после 19, и <code>getline</code> читает «Анна Петрова».</p></div></div></div>
+</div>
+<p class="hint"><code>getline</code> нужен, когда в строке есть пробелы. Для чисел и отдельных слов хватает <code>&gt;&gt;</code>.</p>
+  </div>
+</section>
+
+<!-- 47 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> sum = <span class="num">7</span>;
+    <span class="k">int</span> n = <span class="num">2</span>;
+    <span class="k">double</span> average = sum / n;
+    std::cout &lt;&lt; average &lt;&lt; <span class="s">'\n'</span>;
+
+    std::vector&lt;<span class="k">int</span>&gt; v = {-<span class="num">1</span>, -<span class="num">2</span>, -<span class="num">3</span>};
+    <span class="k">int</span> total = -<span class="num">6</span>;
+    std::cout &lt;&lt; total / v.size() &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt"><span class="n">1</span><span>3.5
+-2</span></div><div class="opt"><span class="n">2</span><span>3
+-2</span></div><div class="opt correct"><span class="n">3</span><span>3
+6148914691236517203</span></div><div class="opt"><span class="n">4</span><span>3.5
+6148914691236517203</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q10_division</span>
+<span class="o">3</span>
+<span class="o">6148914691236517203</span></div><div class="why"><p>Первая строка: <code>int / int</code> — целочисленное деление, дробная часть отбрасывается ещё до присваивания в <code>double</code>.</p><p>Вторая: в выражении <code>int / std::size_t</code> по обычным арифметическим преобразованиям <code>int</code> приводится к <code>size_t</code>. <code>-6</code> становится 2<sup>64</sup> − 6, и уже это делится на 3. Компилятор с <code>-Wall -Wextra</code> здесь <strong>молчит</strong>.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 48 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Вектор векторов — это таблица</h2>
+<div class="cols two">
+  <div class="stack"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    <span class="k">int</span> n, m;
+    std::cin &gt;&gt; n &gt;&gt; m;
+
+    std::vector&lt;std::vector&lt;<span class="k">int</span>&gt;&gt; a(n, std::vector&lt;<span class="k">int</span>&gt;(m));
+    <span class="k">for</span> (<span class="k">int</span> i = <span class="num">0</span>; i &lt; n; ++i) {
+        <span class="k">for</span> (<span class="k">int</span> j = <span class="num">0</span>; j &lt; m; ++j) {
+            std::cin &gt;&gt; a[i][j];
+        }
+    }
+
+    std::cout &lt;&lt; <span class="s">"строк: "</span> &lt;&lt; a.size() &lt;&lt; <span class="s">", столбцов: "</span> &lt;&lt; a[<span class="num">0</span>].size() &lt;&lt; <span class="s">'\n'</span>;
+    std::cout &lt;&lt; <span class="s">"a[1][2] = "</span> &lt;&lt; a[<span class="num">1</span>][<span class="num">2</span>] &lt;&lt; <span class="s">'\n'</span>;
+}</pre><div class="term small"><span class="p">$</span> <span class="c">printf '2 3\n1 2 3\n4 5 6\n' | ./quiz/q24_table</span>
+<span class="o">строк: 2, столбцов: 3</span>
+<span class="o">a[1][2] = 6</span></div></div>
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Как читать запись</h3>
+      <p>Это конструктор <code>vector(count, value)</code>: <strong>n</strong> копий значения <code>std::vector&lt;int&gt;(m)</code>, а оно само — <code>vector(count)</code>, строка из <strong>m</strong> нулей.</p>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <tr><td class="cmd">a[i][j]</td><td class="dsc">строка <code>i</code>, столбец <code>j</code></td></tr>
+        <tr><td class="cmd">a.size()</td><td class="dsc">сколько строк</td></tr>
+        <tr><td class="cmd">a[0].size()</td><td class="dsc">сколько столбцов в первой строке</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 49 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Символы — это маленькие числа</h2>
+<div class="cols two">
+  <div class="stack">
+    <div class="panel pin">
+      <h3>Что это значит на практике</h3>
+      <p>Латинские буквы <code>'a'</code>…<code>'z'</code> идут подряд. Поэтому <code>c - 'a'</code> — номер буквы от 0 до 25, а <code>'a' + 2</code> — буква <code>c</code>.</p>
+      <p>Условие «это строчная буква» — <code>c &gt;= 'a' &amp;&amp; c &lt;= 'z'</code>.</p>
+    </div>
+    <span class="label">вопрос: что напечатает?</span>
+    <pre class="code "><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string s = <span class="s">"hello"</span>;
+    s[<span class="num">0</span>] = s[<span class="num">0</span>] - <span class="s">'a'</span> + <span class="s">'A'</span>;
+
+    std::cout &lt;&lt; s &lt;&lt; <span class="s">' '</span> &lt;&lt; s[<span class="num">1</span>] - <span class="s">'a'</span> &lt;&lt; <span class="s">'\n'</span>;
+}</pre>
+  </div>
+  <div class="stack">
+    <div class="options"><div class="opt correct"><span class="n">1</span><span>Hello 4</span></div><div class="opt"><span class="n">2</span><span>hello 4</span></div><div class="opt"><span class="n">3</span><span>Hello 1</span></div><div class="opt"><span class="n">4</span><span>Hello e</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q13_chars</span>
+<span class="o">Hello 4</span></div><div class="why"><p><code>s[0] - 'a' + 'A'</code>: номер буквы <code>h</code> — 7, заглавная с тем же номером — <code>H</code>.</p><p><code>s[1] - 'a'</code>: у <code>e</code> номер 4. При вычитании <code>char</code> приводятся к <code>int</code>, поэтому результат — число, и печатается 4, а не буква.</p></div></div></div>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 50 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-timer="360" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Задача: заменить все cat на dog</h2>
+<div class="cols two">
+  <div class="panel pin">
+    <h3>Условие</h3>
+    <p>Прочитайте строку целиком. Замените <strong>все</strong> вхождения <code>cat</code> на <code>dog</code>, в том числе внутри других слов, и выведите результат.</p>
+  </div>
+  <div class="io"><div class="stack"><span class="label">ввод</span><div class="term small"><span class="c">cat concatenate cat</span></div></div><div class="stack"><span class="label">вывод</span><div class="term small"><span class="o">dog condogenate dog</span></div></div></div>
+</div>
+<div class="reveal" data-label="подсказка  →"><div class="panel"><h3>Подсказка</h3><p>Ищите в цикле, пока <code>find</code> не вернёт <code>npos</code>. Следующий поиск начинайте <strong>после</strong> вставленного слова: <code>find("cat", откуда)</code>.</p></div></div>
+  </div>
+</section>
+
+<!-- 51 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Разбор: откуда искать дальше</h2>
+<div class="cols two">
+  <div class="reveal" data-label="решение  →"><pre class="code small"><span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+
+<span class="k">int</span> main() {
+    std::string line;
+    std::getline(std::cin, line);
+
+    std::size_t pos = line.find(<span class="s">"cat"</span>);
+    <span class="k">while</span> (pos != std::string::npos) {
+        line.replace(pos, <span class="num">3</span>, <span class="s">"dog"</span>);
+        pos = line.find(<span class="s">"cat"</span>, pos + <span class="num">3</span>);
+    }
+
+    std::cout &lt;&lt; line &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div>
+  <div class="panel pin">
+    <h3>Зачем <code>pos + 3</code></h3>
+    <p>Продолжаем поиск сразу после вставленного <code>dog</code>, а не с начала строки.</p>
+    <p>Если бы заменяли <code>cat</code> на <code>cats</code> и искали каждый раз с начала — нашли бы тот же <code>cat</code> внутри <code>cats</code> снова, и цикл не закончился бы никогда.</p>
+  </div>
+</div>
+  </div>
+</section>
+
+<!-- 52 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code small"><span class="pp">#include &lt;algorithm&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;<span class="k">int</span>&gt; v = {<span class="num">5</span>, <span class="num">4</span>, <span class="num">3</span>, <span class="num">2</span>, <span class="num">1</span>};
+
+    std::sort(v.begin(), v.begin() + <span class="num">3</span>);
+    <span class="k">for</span> (<span class="k">int</span> x : v) {
+        std::cout &lt;&lt; x &lt;&lt; <span class="s">' '</span>;
+    }
+    std::cout &lt;&lt; <span class="s">'\n'</span>;
+
+    std::sort(v.rbegin(), v.rend());
+    <span class="k">for</span> (<span class="k">int</span> x : v) {
+        std::cout &lt;&lt; x &lt;&lt; <span class="s">' '</span>;
+    }
+    std::cout &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt"><span class="n">1</span><span>1 2 3 4 5
+5 4 3 2 1</span></div><div class="opt correct"><span class="n">2</span><span>3 4 5 2 1
+5 4 3 2 1</span></div><div class="opt"><span class="n">3</span><span>3 4 5 2 1
+1 2 3 4 5</span></div><div class="opt"><span class="n">4</span><span>5 4 3 1 2
+5 4 3 2 1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q18_partial_sort</span>
+<span class="o">3 4 5 2 1</span>
+<span class="o">5 4 3 2 1</span></div><div class="why"><p><code>sort(v.begin(), v.begin() + 3)</code> сортирует только первые три элемента — от начала до позиции 3, <strong>не включая</strong> её. Хвост <code>2 1</code> не трогается.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 53 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Что напечатает программа?</h2><div class="cols two"><div class="stack"><pre class="code "><span class="pp">#include &lt;algorithm&gt;</span>
+<span class="pp">#include &lt;iostream&gt;</span>
+<span class="pp">#include &lt;string&gt;</span>
+<span class="pp">#include &lt;vector&gt;</span>
+
+<span class="k">int</span> main() {
+    std::vector&lt;std::string&gt; w(<span class="num">3</span>);
+    w[<span class="num">1</span>] += <span class="s">"hi"</span>;
+    std::cout &lt;&lt; w.size() &lt;&lt; <span class="s">' '</span> &lt;&lt; w[<span class="num">0</span>].size() &lt;&lt; <span class="s">' '</span> &lt;&lt; w[<span class="num">1</span>].size() &lt;&lt; <span class="s">'\n'</span>;
+
+    std::string s = <span class="s">"hello"</span>;
+    std::cout &lt;&lt; std::count(s.begin(), s.end(), <span class="s">'l'</span>) &lt;&lt; <span class="s">'\n'</span>;
+}</pre></div><div class="stack"><span class="label">варианты — покажите номер на пальцах</span><div class="options"><div class="opt correct"><span class="n">1</span><span>3 0 2
+2</span></div><div class="opt"><span class="n">2</span><span>3 2 2
+2</span></div><div class="opt"><span class="n">3</span><span>1 0 2
+2</span></div><div class="opt"><span class="n">4</span><span>3 0 2
+1</span></div></div><div class="reveal" data-answer data-label="показать ответ  →"><div class="answer"><div class="term small"><span class="p">$</span> <span class="c">./quiz/q19_strings_in_vector</span>
+<span class="o">3 0 2</span>
+<span class="o">2</span></div><div class="why"><p><code>w(3)</code> — три пустые строки. <code>+= "hi"</code> дописывает только ко второй.</p><p><code>std::count</code> работает и для строки: в <code>hello</code> две буквы <code>l</code>.</p></div></div></div></div></div>
+  </div>
+</section>
+
+<!-- 54 -->
+<section class="slide" data-sec="Запас" data-time="запас" data-notes="">
+  <div class="wrap">
+    <div class="eyebrow"><span class="sec">Запас</span></div><h2>Ещё задачи для тех, кто всё сделал</h2>
+<div class="tasklist">
+  <div class="panel"><h3>Уникальные<span class="lvl l2">средне</span></h3><p>Числа до конца ввода → только те, что встречаются <strong>ровно один раз</strong>, по возрастанию.</p></div>
+  <div class="panel"><h3>Слова задом наперёд<span class="lvl l2">средне</span></h3><p>Предложение одной строкой → те же слова в обратном порядке.</p></div>
+  <div class="panel"><h3>Сжатие строки<span class="lvl l3">посложнее</span></h3><p>Строка из латинских букв → буква и сколько раз подряд она повторилась: <code>aaabcc</code> → <code>a3b1c2</code>.</p></div>
+  <div class="panel"><h3>Магическая таблица<span class="lvl l3">посложнее</span></h3><p>Таблица n × n → «да», если суммы всех строк и всех столбцов одинаковые.</p></div>
+</div>
+  </div>
+</section>
+
+</div>
+
+<div id="notes" hidden><h4>Заметки семинаристу<span id="notes-time"></span></h4><ul id="notes-body"></ul></div>
+
+<div class="bar">
+  <button id="prev" aria-label="Предыдущий слайд">←</button>
+  <button id="next" aria-label="Дальше">→</button>
+  <span class="counter"><b id="cur">1</b> / <span id="total">54</span></span>
+  <button id="timer" hidden>таймер 0:00</button>
+  <span class="spacer"></span>
+  <span class="counter" id="secname"></span>
+  <span class="keys-hint">→ дальше и ответы · T таймер · D тема</span>
+  
+</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var notes = document.getElementById('notes');
+  var notesBody = document.getElementById('notes-body');
+  var notesOpen = false;
+
+  var timerBtn = document.getElementById('timer');
+  var tLeft = 0, tOwner = -1, tRunning = false, tHandle = null;
+
+  function fmt(s) { var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  function drawTimer() {
+    if (timerBtn.classList.contains('done')) { timerBtn.textContent = 'время вышло'; return; }
+    timerBtn.textContent = (tRunning ? 'идёт ' : 'таймер ') + fmt(tLeft);
+  }
+  function stopTimer() { tRunning = false; clearInterval(tHandle); timerBtn.classList.remove('running'); }
+  function toggleTimer() {
+    if (timerBtn.hidden) return;
+    if (timerBtn.classList.contains('done')) {
+      timerBtn.classList.remove('done');
+      tLeft = +(slides[tOwner] && slides[tOwner].dataset.timer || 0);
+      drawTimer(); return;
+    }
+    if (tRunning) { stopTimer(); drawTimer(); return; }
+    if (tLeft <= 0) return;
+    tRunning = true; timerBtn.classList.add('running');
+    tHandle = setInterval(function () {
+      tLeft -= 1;
+      if (tLeft <= 0) { tLeft = 0; stopTimer(); timerBtn.classList.add('done'); }
+      drawTimer();
+    }, 1000);
+    drawTimer();
+  }
+
+  document.getElementById('total').textContent = slides.length;
+
+  function render() {
+    slides.forEach(function (s, n) { s.classList.toggle('is-active', n === i); });
+    var s = slides[i];
+    document.getElementById('cur').textContent = i + 1;
+    document.getElementById('progress').style.width = ((i + 1) / slides.length * 100) + '%';
+    document.getElementById('secname').textContent = s.dataset.sec || '';
+    notesBody.innerHTML = s.dataset.notes || '<li>—</li>';
+    var t = s.dataset.time || '';
+    document.getElementById('notes-time').textContent = t ? '  ·  ' + t : '';
+
+    var dur = +(s.dataset.timer || 0);
+    if (dur && !tRunning && tOwner !== i) {
+      tLeft = dur; tOwner = i; timerBtn.classList.remove('done');
+    }
+    timerBtn.hidden = !(dur || tRunning);
+    drawTimer();
+
+    window.scrollTo(0, 0);
+    try { history.replaceState(null, '', '#s' + (i + 1)); } catch (e) {}
+  }
+
+  function go(n) { i = Math.max(0, Math.min(slides.length - 1, n)); render(); }
+
+  function show(r) {
+    r.classList.add('shown');
+    if (r.hasAttribute('data-answer')) {
+      var sl = r.closest('.slide');
+      if (sl) sl.classList.add('answered');
+    }
+  }
+  function revealNext() {
+    var r = slides[i].querySelector('.reveal:not(.shown)');
+    if (r) { show(r); return true; }
+    return false;
+  }
+  function next() { if (!revealNext()) go(i + 1); }
+
+  function toggleNotes() {
+    notesOpen = !notesOpen;
+    notes.hidden = !notesOpen;
+    document.getElementById('notes-btn').classList.toggle('on', notesOpen);
+  }
+  function toggleTheme() {
+    var root = document.documentElement;
+    var cur = root.getAttribute('data-theme');
+    if (!cur) cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.reveal'), function (r) {
+    r.setAttribute('tabindex', '0');
+    r.setAttribute('role', 'button');
+    r.addEventListener('click', function () { if (!r.classList.contains('shown')) show(r); });
+    r.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter') && !r.classList.contains('shown')) { e.preventDefault(); e.stopPropagation(); show(r); }
+    });
+  });
+
+  document.getElementById('next').addEventListener('click', next);
+  document.getElementById('prev').addEventListener('click', function () { go(i - 1); });
+  
+  timerBtn.addEventListener('click', toggleTimer);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var k = e.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); next(); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (k === 'Home') { e.preventDefault(); go(0); }
+    else if (k === 'End') { e.preventDefault(); go(slides.length - 1); }
+    
+    else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { e.preventDefault(); toggleTimer(); }
+    else if (k === 'r' || k === 'R' || k === 'к' || k === 'К') {
+      e.preventDefault();
+      Array.prototype.forEach.call(slides[i].querySelectorAll('.reveal:not(.shown)'), show);
+    }
+    else if (k === 'd' || k === 'D' || k === 'в' || k === 'В') { e.preventDefault(); toggleTheme(); }
+    else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') {
+      e.preventDefault();
+      if (document.fullscreenElement) { document.exitFullscreen(); }
+      else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
+    }
+  });
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) { i = Math.max(0, Math.min(slides.length - 1, parseInt(m[1], 10) - 1)); }
+  render();
+})();
+</script>

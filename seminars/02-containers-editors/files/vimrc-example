@@ -1,0 +1,20 @@
+" ~/.vimrc — минимум для работы с кодом
+
+syntax on               " подсветка синтаксиса
+filetype plugin indent on  " отступы по правилам языка (нужно для =)
+set number              " номера строк
+set ruler               " позиция курсора в статусной строке
+
+set tabstop=4           " таб показывается шириной 4
+set shiftwidth=4        " сдвиг >> и << на 4
+set expandtab           " вставлять пробелы вместо табов
+set autoindent          " новая строка наследует отступ
+set smartindent         " и добавляет отступ после {
+
+set incsearch           " подсвечивать совпадение по мере набора
+set hlsearch            " подсвечивать все совпадения
+set ignorecase          " поиск без учёта регистра,
+set smartcase           " но если набрал заглавную — с учётом
+
+set showcmd             " показывать набираемую команду
+set backspace=indent,eol,start
